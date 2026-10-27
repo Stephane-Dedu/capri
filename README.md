@@ -1,8 +1,24 @@
 # Capri
 
+<p align="center">
+  <img src="docs/capri.gif" width="720" alt="Capri perched on the desktop, glitch-warping across the screen in a burst of shards, typing into the air while Claude Code works, cheering when the task is done, then lounging">
+</p>
+
+<p align="center"><b>Claude Code, with a body, a mood and an attitude.</b></p>
+
 A desktop companion inspired by Capri, the glitchy construct from *Cyberpunk: Edgerunners* season 2, with Claude Code inside. She's a little cut-paper girl of black shards under a huge glittering hot-pink mane, with a green mask, ringed blue eyes and a black jaw full of jagged white teeth. She lives on top of your screen, **glitch-teleports** around it, and lounges between jobs: perched, legs crossed, lying on her belly in mid-air, hugging a knee, or curled up asleep if you leave her alone.
 
 Click her and you're talking to Claude Code: she reads, edits and runs things in your project, asks before she touches anything, and tells you when she's done. Quick stuff gets a fast answer from Claude Haiku 5.5; real jobs go to Claude Opus 5.5. She also listens to the Claude Code sessions in your terminals, so she can tell you when one of them finishes or needs you, and now and then she has an opinion about what you're doing ("wtf is `utils2_final_REAL.ts`, choom?").
+
+Capri is a side project, built for fun, but she isn't a toy: she's a full Claude Code session with a router in front of it, so the attitude stays in the chat while the code, the commands and the commit messages stay clean.
+
+## What she can do
+
+- **Change code, fast.** `Ctrl+Shift+Space` and she warps next to your cursor with the chat open. Ask in plain words: she reads the code, makes the edit, runs the tests, and shows every edit as a diff card you allow in one click (or switch to *accept edits* and let her go). `Esc` stops her mid-task, `/resume` picks up where you left off.
+- **Route each job to the right brain.** Haiku answers chat, lookups and small edits fast, Opus takes refactors, debugging and reviews, and Haiku can hand a task up mid-turn when it turns out harder than it looked. Same conversation, nothing lost. → [Agent routing](#agent-routing)
+- **Use your MCP servers, skills and commands.** She runs on Claude Code itself, so the MCP servers, `CLAUDE.md`, skills, slash commands and subagents you've set up are hers too. → [MCP and the rest of your setup](#mcp-skills-and-the-rest-of-your-setup)
+- **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you.
+- **Look good doing it.** A traced cut-paper puppet animated on twos, with 12 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
 
@@ -30,15 +46,6 @@ Open the chat (click her, or `Ctrl+Shift+Space`) and ask for anything you'd ask 
 - **Permission modes**, from the tray or `/mode`: *ask before edits* (default), *accept edits*, *plan only*, *auto*. In plan mode she proposes a plan and asks to go ahead.
 - `Esc` stops her mid-task (or closes the chat when she's idle).
 
-### Two brains
-
-Each message goes to one of two models, in the same conversation:
-
-- **Claude Haiku 5.5** at medium effort answers by default: chat, questions, lookups, small edits. It's fast.
-- **Claude Opus 5.5** at high effort takes real jobs. A message goes straight to it when it reads like one (refactor, implement, debug, investigate, review, migrate, "think hard", `/init`, `/review`, a long brief, plan mode), and follow-ups to an Opus job stay on Opus for 10 minutes. Haiku can also hand a task up itself when it turns out harder than it looked: it calls a hand-off tool, and Opus continues from the next step with everything so far in context.
-
-The badge in the chat header shows who's answering (HAIKU or a pink OPUS), and the log says when she hands a job up. To pin one model instead, use `/model <name>` or the tray's **Model** menu; `/model auto` switches by task again.
-
 | Command | |
 |---|---|
 | `/new` | Fresh conversation |
@@ -55,7 +62,43 @@ The badge in the chat header shows who's answering (HAIKU or a pink OPUS), and t
 
 Any other `/command` goes to Claude Code, so your custom commands and skills work too.
 
-## Her moods and poses
+### Agent routing
+
+One conversation, two brains. Each message goes to one of them, and both see the whole conversation:
+
+```mermaid
+flowchart LR
+    M([your message]) --> R{router}
+    R -- "chat, questions,<br/>lookups, small edits" --> H["Claude Haiku 5.5<br/>medium effort"]
+    R -- "real job, plan mode,<br/>long brief, follow-up" --> O["Claude Opus 5.5<br/>high effort"]
+    H -- "escalate tool:<br/>harder than it looked" --> O
+```
+
+- **Claude Haiku 5.5** at medium effort answers by default: chat, questions, lookups, small edits. It's fast.
+- **Claude Opus 5.5** at high effort takes real jobs. A message goes straight to it when it reads like one (refactor, implement, debug, investigate, review, migrate, "think hard", `/init`, `/review`, a long brief, plan mode), and follow-ups to an Opus job stay on Opus for 10 minutes.
+- **The hand-off.** Haiku can also hand a task up itself when it turns out harder than it looked: it calls an `escalate` tool, and Opus continues from the next step with everything so far in context. No restart, no copy-paste.
+
+The router itself is plain pattern matching in `agent.js` (small talk, slash commands, keywords, message length, how recent the last Opus job was), so picking a brain costs no extra model call. The switch happens on the live session through the SDK's `setModel` and `applyFlagSettings`.
+
+The badge in the chat header shows who's answering (HAIKU or a pink OPUS), and the log says when she hands a job up. To pin one model instead, use `/model <name>` or the tray's **Model** menu; `/model auto` switches by task again. Both models can be swapped in `.env` (see [Config](#config)).
+
+### MCP, skills and the rest of your setup
+
+Capri doesn't reimplement Claude Code: she drives it through the Claude Agent SDK with Claude Code's own system prompt and every settings source loaded (user, project and local), the same way the CLI starts. Whatever you've already set up for Claude Code comes along:
+
+- **MCP servers** you added with `claude mcp add` or in a project `.mcp.json`. Ask her to check an issue, query a database or read a dashboard and she calls them like the CLI would. Each call shows up in the tool list by name (`mcp__<server>__<tool>`) and goes through the same permission card as an edit, with its arguments, unless your settings already allow it.
+- **Skills, slash commands and subagents.** `/review`, your own `/commands` and skills all work from her chat. A subagent's work shows up as a single `Task` line instead of flooding the panel.
+- **`CLAUDE.md` and permissions** of the project she's in apply as usual.
+
+She also runs one small MCP server of her own, in-process: `capri`, with the single `escalate` tool behind the hand-off above. It's always loaded, so Haiku sees it without a tool search, and it never asks for permission.
+
+## What she looks like
+
+Every image here is rendered from the real rig in `src/renderer/`, not a mockup.
+
+<p align="center">
+  <img src="docs/capri-poses.png" alt="Capri's twelve poses: perch, crossed, chill, lounge, hug and sleep between jobs; think, hack, point, victory, crouch and float while she works or reacts">
+</p>
 
 She picks a pose from what's going on:
 
@@ -70,6 +113,10 @@ She picks a pose from what's going on:
 | **sleep**: curled up, eyes shut | Nothing from you for 4 minutes. Move the mouse near her, save a file or use Claude Code and she's up again |
 
 Each reply starts with a hidden mood tag (`[[smug]]`, `[[hype]]`, `[[glitch]]`…) that sets her face and how she moves: hype bounces, flares her hair and opens her jaw, annoyed makes the hair bristle, soft slows her down, glitch jitters everything.
+
+<p align="center">
+  <img src="docs/capri-moods.png" alt="Close-ups of Capri's face in each mood: idle, hype, smug, curious, mischief, annoyed, soft and glitch">
+</p>
 
 Her mouth follows the anime: she has no lips, just white teeth cut into a black jaw. Closed, it's a thin zigzag like a lightning bolt; grinning, a band that starts as a thin line and swells into a row of teeth; open, a big wedge hanging under a sawtooth edge; surprised, a small wedge. When she talks the jaw flaps between them.
 
@@ -145,6 +192,7 @@ tools/
   capri-hook.js  The hook command Claude Code runs
   trace_art.py   Traces her body from a reference frame
   trace_portrait.py  Traces the face close-up
+docs/            The README's GIF and pose / mood sheets, rendered from the rig
 ```
 
 - **The brain** is the Claude Agent SDK running Claude Code with its own system prompt plus her voice on top, so she has the full Claude Code toolset and your `CLAUDE.md`, settings and permissions. Her own `AskUserQuestion` is off; permission prompts go through the chat cards instead. Model switches use the SDK's `setModel` and `applyFlagSettings`, and the hand-off is a small in-process MCP tool.
@@ -177,3 +225,7 @@ py tools/trace_portrait.py
 - Voice: TTS with a bitcrushed filter, push-to-talk input
 - Multi-monitor roaming
 - More poses: sitting on the edge of the active window, hanging off the top of the screen
+
+## Credits
+
+Capri (Project Capricorn) comes from *Cyberpunk: Edgerunners*, by Studio Trigger and CD PROJEKT RED. This is an unofficial fan project, made for fun and not affiliated with either. The brain is [Claude Code](https://docs.claude.com/en/docs/claude-code) through the Claude Agent SDK.
