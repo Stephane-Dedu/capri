@@ -14,5 +14,9 @@
   },
   "devDependencies": {
     "electron": "^45.0.0"
+  },
+  "optionalDependencies": {
+    "koffi": "^3.3.4",
+    "uiohook-napi": "^1.5.5"
   }
 }

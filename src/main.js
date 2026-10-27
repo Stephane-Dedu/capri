@@ -12,9 +12,15 @@ const { Agent, MODES, TIERS } = require('./agent');
 const { Companion } = require('./companion');
 const hooks = require('./hooks');
 const config = require('./config');
+const nvim = require('./nvim');
+const look = require('./look');
+const { frontmost } = require('./frontmost');
+const { setupHearing } = require('./hearing');
+const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
 const SUMMON_KEY = 'CommandOrControl+Shift+Space';
+const SUMMON_LABEL = SUMMON_KEY.replace('CommandOrControl', process.platform === 'darwin' ? 'Cmd' : 'Ctrl');
 const MODE_LABELS = { default: 'ask before edits', acceptEdits: 'accept edits', plan: 'plan only', auto: 'auto' };
 const AGENT_EVENTS = ['ready', 'text', 'tool', 'tool-done', 'permission', 'permission-closed', 'done', 'busy', 'error', 'warn', 'mode', 'route'];
 
@@ -22,6 +28,10 @@ let win = null;
 let tray = null;
 let agent = null;
 let companion = null;
+let spaces = null;
+let shot = null; // the screenshot from the last summon, until she looks at it
+let hearing = null;
+const activeWindow = frontmost();
 let commands = [];
 let visible = !process.env.CAPRI_START_HIDDEN;
 
@@ -64,7 +74,16 @@ function start() {
   companion.watch(cfg.cwd);
 
   createWindow();
+  // You switched desktops: she follows you over, if she's out and allowed to.
+  spaces = workspaces.watch(win, () => {
+    if (visible && config.get().follow) send('workspace', { here: spaces.here() });
+  });
+  spaces.setFollow(cfg.follow);
+  // Her ears and voice: the transcript, the wake word, push-to-talk.
+  hearing = setupHearing({ getWin: () => win, send, summon: summonWith, changed: hearingChanged });
+  agent.transcripts = hearing.transcriptDir;
   createTray();
+  hearingChanged();
   if (!globalShortcut.register(SUMMON_KEY, summon)) {
     console.warn(`[capri] could not register ${SUMMON_KEY}; use the tray icon instead`);
   }
@@ -76,9 +95,15 @@ function start() {
 // One transparent, click-through window covering the primary work area.
 // The renderer turns click-through off only while the cursor is over Capri
 // or her chat panel.
+//
+// On macOS it's a non-activating panel: it takes the keyboard without
+// activating the app. Activating an app from another app's full-screen Space
+// makes macOS leave that Space, so a plain window couldn't be summoned over a
+// full-screen terminal.
 function createWindow() {
   win = new BrowserWindow({
     ...screen.getPrimaryDisplay().workArea,
+    ...(process.platform === 'darwin' ? { type: 'panel' } : {}),
     transparent: true,
     backgroundColor: '#00000000',
     frame: false,
@@ -109,6 +134,11 @@ function createWindow() {
   win.on('closed', () => {
     win = null;
   });
+  // Panels hide when their app deactivates, which happens after one of her
+  // dialogs (project folder, hooks). Bring her back.
+  app.on('did-resign-active', () => {
+    if (win && visible && !win.isVisible()) win.showInactive();
+  });
   win.webContents.on('console-message', (event) => console.log(`[renderer] ${event.message}`));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
@@ -136,17 +166,44 @@ function info() {
     wandering: cfg.wander,
     reactions: cfg.reactions,
     hooks: hooks.status(),
+    ...hearing?.info(),
   };
 }
 
-// Warp Capri next to the cursor and open her chat.
+// Listening, push-to-talk or her voice changed: the page, the menu and the
+// menu-bar "● REC" catch up.
+function hearingChanged() {
+  send('agent:info', info());
+  refreshMenu();
+  if (tray && process.platform === 'darwin') tray.setTitle(hearing.trayTitle());
+}
+
+// Warp Capri next to the cursor and open her chat, on the desktop you're on,
+// bringing along whatever you've selected in Neovim. The screenshot is taken
+// now, before she lands in front of what you're looking at; it only goes to a
+// model if the summon opens her chat.
 function summon() {
+  return summonWith({});
+}
+
+// `heard`: what you said to her (push-to-talk, or after the wake word), sent
+// as your message once she's there. `woke`: you just said her name.
+async function summonWith({ heard = null, woke = false }) {
   if (!win) return;
+  const watching = config.get().look;
+  const [selection, image] = await Promise.all([
+    nvim.selection().catch(() => null),
+    watching ? look.capture(screen.getCursorScreenPoint()).catch(() => null) : null,
+  ]);
+  if (!win) return;
+  shot = image ? { image, at: Date.now() } : null;
+  if (!visible) setVisible(true);
+  if (!spaces.here()) await spaces.follow();
+  win.focus();
   const cursor = screen.getCursorScreenPoint();
   const bounds = win.getBounds();
-  if (!visible) setVisible(true);
-  win.focus();
-  send('summon', { x: cursor.x - bounds.x, y: cursor.y - bounds.y });
+  const sight = image ? 'ready' : watching && process.platform === 'darwin' && look.access() !== 'granted' ? 'blocked' : null;
+  send('summon', { x: cursor.x - bounds.x, y: cursor.y - bounds.y, selection, look: sight, heard, woke });
 }
 
 // Hiding keeps her (and her conversation) alive but off screen, e.g. while gaming.
@@ -197,6 +254,20 @@ function setReactions(on) {
 function setWander(on) {
   config.set({ wander: on });
   send('wander', on);
+  refreshMenu();
+}
+
+function setLook(on) {
+  config.set({ look: on });
+  if (!on) shot = null;
+  refreshMenu();
+}
+
+function setFollow(on) {
+  config.set({ follow: on });
+  const away = !spaces.here();
+  spaces.setFollow(on);
+  if (on && visible && away) send('workspace');
   refreshMenu();
 }
 
@@ -259,6 +330,10 @@ function buildMenu() {
     { label: 'Hooked into Claude Code', type: 'checkbox', checked: hookState === 'installed', click: () => toggleHooks().finally(refreshMenu) },
     { label: 'Comment on what I do', type: 'checkbox', checked: cfg.reactions, click: (item) => setReactions(item.checked) },
     { label: 'Wander around', type: 'checkbox', checked: cfg.wander, click: (item) => setWander(item.checked) },
+    { label: 'Follow me across desktops', type: 'checkbox', checked: cfg.follow, click: (item) => setFollow(item.checked) },
+    { label: 'Look at my screen when summoned', type: 'checkbox', checked: cfg.look, click: (item) => setLook(item.checked) },
+    { type: 'separator' },
+    ...(hearing?.menu() ?? []),
     { label: 'Warp somewhere', click: () => send('warp') },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
@@ -271,7 +346,7 @@ function refreshMenu() {
 
 function createTray() {
   tray = new Tray(makeTrayIcon());
-  tray.setToolTip(`${NAME} (${SUMMON_KEY.replace('CommandOrControl', 'Ctrl')})`);
+  tray.setToolTip(`${NAME} (${SUMMON_LABEL})`);
   refreshMenu();
   tray.on('click', summon);
 }
@@ -318,8 +393,42 @@ ipcMain.on('capri:reset', resetConversation);
 
 ipcMain.handle('capri:status', () => info());
 
-ipcMain.on('capri:chat', (_event, text) => {
-  agent.send(String(text).slice(0, 50000)).catch((err) => send('agent:error', { kind: 'engine', message: String(err.message ?? err) }));
+// Context from the summon rides in front of the message: what she saw on the
+// screen first, then the Neovim selection right above your words.
+ipcMain.on('capri:chat', (_event, text, { selection, screen: seen, voice } = {}) => {
+  let message = String(text).slice(0, 50000);
+  // Said out loud: her answer is read back (see "Talking out loud" in persona.js).
+  if (voice) message = `(spoken) ${message}`;
+  if (selection) message = nvim.prompt(selection, message);
+  if (seen?.summary) message = look.prompt(seen, message);
+  agent.send(message).catch((err) => send('agent:error', { kind: 'engine', message: String(err.message ?? err) }));
+});
+
+// The chat opened on a summon: she looks at the screenshot it took. Stale or
+// already-used shots are dropped, so each summon costs at most one look.
+ipcMain.handle('capri:look', async () => {
+  const taken = shot;
+  shot = null;
+  if (!taken || Date.now() - taken.at > 15000) return null;
+  return look.describe(taken.image);
+});
+
+// She's been left on another desktop: move her window to yours.
+ipcMain.handle('capri:follow', () => spaces?.follow() ?? false);
+
+// Her chat closed: give the keyboard back. On macOS her window is a
+// non-activating panel, so the app you summoned her from never stopped being
+// the active one, and dropping her focus returns typing to it.
+ipcMain.on('capri:release', () => {
+  if (win && process.platform === 'darwin' && win.isFocused()) win.blur();
+});
+
+// The window you're in, in her overlay's coordinates, so she can sit on it.
+ipcMain.handle('capri:active-window', () => {
+  const frame = win && activeWindow();
+  if (!frame) return null;
+  const bounds = win.getBounds();
+  return { ...frame, x: frame.x - bounds.x, y: frame.y - bounds.y };
 });
 
 ipcMain.on('capri:answer', (_event, { id, choice, note } = {}) => {
@@ -369,6 +478,14 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       return { text: config.get().reactions ? 'commentary: ON' : 'commentary: off. i\'ll only speak when claude finishes or needs you.' };
     case 'commands':
       return { text: commands.length ? commands.map((c) => `/${c}`).join(' ') : 'send me a message first, then ask again.' };
+    case 'listen':
+    case 'wake':
+    case 'talk':
+    case 'ptt': {
+      if (arg === 'on' || arg === 'off') hearing.set[name](arg === 'on');
+      else if (arg) return { error: `/${name} on|off` };
+      return { text: `${hearing.labels[name]}: ${config.get()[name] ? 'ON' : 'off'}` };
+    }
     default:
       return { error: `unknown command /${name}` };
   }
@@ -376,6 +493,8 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  spaces?.stop();
+  hearing?.stop();
   companion?.stop();
   agent?.reset();
 });

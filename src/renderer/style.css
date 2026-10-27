@@ -94,6 +94,9 @@ body {
   position: relative;
   flex: 1;
   min-height: 0;
+  /* Otherwise one long unbreakable line (a tool row, a command) stretches the
+     frame past the panel, and the clip-path cuts the text off. */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: rgba(8, 6, 14, 0.96);
@@ -193,7 +196,9 @@ body {
   animation: blink 0.5s steps(1) infinite;
 }
 
-#status[data-kind="ask"] {
+#status[data-kind="ask"],
+#status[data-kind="look"],
+#status[data-kind="listen"] {
   color: var(--cyan);
   animation: blink 0.9s steps(1) infinite;
 }
@@ -527,6 +532,59 @@ body {
 
 #input::placeholder {
   color: rgba(244, 247, 255, 0.35);
+}
+
+/* Context riding along with the next message: a Neovim selection, what she
+   saw on screen. */
+#attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 14px 0 12px;
+  border-top: 1px solid rgba(255, 42, 109, 0.35);
+  color: var(--cyan);
+  font-size: 11px;
+}
+
+#attach[hidden] {
+  display: none;
+}
+
+#attach:not([hidden]) + #ask {
+  border-top: 0;
+}
+
+#attach .chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#attach .size {
+  opacity: 0.55;
+}
+
+#attach button {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--white);
+  opacity: 0.55;
+  font: inherit;
+  cursor: pointer;
+}
+
+#attach button:hover {
+  opacity: 1;
+  color: var(--pink);
+}
+
+.msg.user .tag {
+  margin-right: 6px;
+  padding: 0 4px;
+  background: rgba(0, 240, 255, 0.15);
+  color: var(--cyan);
+  font-size: 10.5px;
 }
 
 /* ---- cut-in: an anime close-up of her face for big moments -------------- */

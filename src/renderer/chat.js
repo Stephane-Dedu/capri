@@ -16,6 +16,8 @@ window.Capri = window.Capri || {};
     busy: 'thinking',
     work: 'working',
     ask: 'needs you',
+    look: 'looking',
+    listen: 'listening',
   };
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -118,7 +120,7 @@ window.Capri = window.Capri || {};
   }
 
   class Chat {
-    constructor(root, { onSend, onEscape, onAnswer }) {
+    constructor(root, { onSend, onEscape, onStop, onAnswer }) {
       this.root = root;
       this.log = root.querySelector('#log');
       this.input = root.querySelector('#input');
@@ -126,6 +128,8 @@ window.Capri = window.Capri || {};
       this.subEl = root.querySelector('.sub');
       this.modeEl = root.querySelector('#mode');
       this.brainEl = root.querySelector('#brain');
+      this.attachEl = root.querySelector('#attach');
+      this.context = {};
       this.onAnswer = onAnswer;
       this.replies = [];
       this.sent = [];
@@ -147,6 +151,11 @@ window.Capri = window.Capri || {};
         } else if (e.key === 'Escape') {
           e.stopPropagation();
           onEscape();
+        } else if (e.key === 'c' && e.ctrlKey && !e.metaKey && !e.altKey && this.input.selectionStart === this.input.selectionEnd) {
+          // Ctrl+C stops her, like in a terminal. With text selected it's left
+          // alone, so it still copies on Windows.
+          e.preventDefault();
+          onStop();
         } else if (e.key === 'ArrowUp' && this.sent.length && (!this.input.value || this.recall >= 0)) {
           e.preventDefault();
           this.recall = this.recall < 0 ? this.sent.length - 1 : Math.max(0, this.recall - 1);
@@ -159,6 +168,10 @@ window.Capri = window.Capri || {};
       });
       this.input.addEventListener('input', () => this.fitInput());
       root.querySelector('#close').addEventListener('click', () => onEscape(true));
+      this.attachEl.addEventListener('click', (e) => {
+        const chip = e.target.closest('button') && e.target.closest('.chip');
+        if (chip) this.attach(chip.dataset.key, null);
+      });
 
       this.log.addEventListener('click', (e) => {
         // Permission buttons.
@@ -241,6 +254,32 @@ window.Capri = window.Capri || {};
       this.root.classList.add('shake');
     }
 
+    // Context that goes along with the next message, one chip each: a
+    // Neovim selection ('selection') and what she saw on screen ('screen').
+    attach(key, value) {
+      if (value) this.context[key] = value;
+      else delete this.context[key];
+      const chip = (name, label, size, title) =>
+        `<span class="chip" data-key="${name}" title="${esc(title)}"><span class="what">${esc(label)}</span><span class="size">${esc(size)}</span><button type="button" title="Don't send it">✕</button></span>`;
+      const { selection, screen } = this.context;
+      const chips = [];
+      if (selection) {
+        const lines = selection.to - selection.from + 1;
+        chips.push(chip('selection', `⧉ ${selection.label}`, `${lines} line${lines === 1 ? '' : 's'}`, selection.file || ''));
+      }
+      if (screen) chips.push(chip('screen', '◉ screen', 'what i saw', screen.summary));
+      this.attachEl.innerHTML = chips.join('');
+      this.attachEl.hidden = !chips.length;
+    }
+
+    takeContext() {
+      const { context } = this;
+      this.context = {};
+      this.attachEl.hidden = true;
+      this.attachEl.innerHTML = '';
+      return context;
+    }
+
     setInput(value) {
       this.input.value = value;
       this.fitInput();
@@ -266,8 +305,8 @@ window.Capri = window.Capri || {};
       return div;
     }
 
-    addUser(text) {
-      this.line('user', esc(text).replace(/\n/g, '<br>'));
+    addUser(text, tags = []) {
+      this.line('user', `${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join('')}${esc(text).replace(/\n/g, '<br>')}`);
     }
 
     addSys(text) {

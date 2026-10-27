@@ -3,7 +3,7 @@
 // and the main process.
 
 (() => {
-  const { Rig, FX, Chat, QUIPS, RIG_VIEWBOX, ART, Portrait, shortModel } = window.Capri;
+  const { Rig, FX, Chat, Mic, Voice, QUIPS, SUMMON_KEY, RIG_VIEWBOX, ART, SEAT_Y, KNEE_Y, HIPS_X, Portrait, shortModel } = window.Capri;
   const { bridge } = window;
 
   // 400px for the traced frame, plus the room below it for dangling legs.
@@ -20,6 +20,13 @@
   const CUTIN_MS = 2300;
   // Poses: what she does with herself between jobs, and when she nods off.
   const IDLE_POSES = { perch: 3, crossed: 3, chill: 2, float: 2, lounge: 2, hug: 2 };
+  // Spots she likes: the top edge of the window you're in, and the top of
+  // the screen, hanging upside down by her knees. Where she meets the edge,
+  // as fractions of her sprite box, and how long she stays.
+  const SEAT_AT = SEAT_Y / RIG_VIEWBOX.h;
+  const KNEE_AT = KNEE_Y / RIG_VIEWBOX.h;
+  const HIPS_AT = HIPS_X / RIG_VIEWBOX.w;
+  const SPOT_MS = [20000, 45000];
   const SLEEP_AFTER = 4 * 60000;
 
   // Warp choreography, in ms: charge up (tearing), collapse to a scanline,
@@ -69,9 +76,16 @@
   const cutin = { el: document.getElementById('cutin'), face: new Portrait(document.getElementById('cutinFace'), CUTIN_VIEW), timer: 0 };
   const chat = new Chat(document.getElementById('chat'), {
     onSend: send,
-    onEscape: escape,
+    onEscape: closeChat,
+    onStop: stop,
     onAnswer: (id, choice, note) => bridge.answer(id, choice, note),
   });
+  // Her ears (mic frames go to main for Whisper) and her bitcrushed voice.
+  const mic = new Mic({
+    onFrame: (source, samples) => bridge.audio(source, samples),
+    onError: (err) => chat.addSys(`my ears glitched: ${err.message}`),
+  });
+  const voice = new Voice({ onStart: (ms) => bridge.speaking(ms) });
 
   const state = {
     pos: { x: innerWidth - SIZE.w - 80, y: innerHeight - SIZE.h - EDGE },
@@ -79,6 +93,13 @@
     moving: false, // a warp is in progress
     acting: false, // an idle routine (possibly several warps) is in progress
     summoning: false,
+    glance: null, // her look at your screen, while it's on the way
+    toldBlind: false, // said once that macOS won't let her see the screen
+    voiceTurn: false, // you said the current request out loud, so she answers out loud
+    lastReply: '', // her latest message, for reading back
+    following: false,
+    spot: null, // { kind: 'ledge' | 'hang', until, … } while she sits on a window or hangs off the top
+    flipped: false, // drawn upside down (hanging) // following you to another desktop
     wander: true,
     replying: false,
     gazeOverride: null,
@@ -119,7 +140,14 @@
   }
 
   function faceCenter() {
-    return { x: state.pos.x + SIZE.w * FACE_AT.x, y: state.pos.y + SIZE.h * FACE_AT.y };
+    const at = state.flipped ? { x: 1 - FACE_AT.x, y: 1 - FACE_AT.y } : FACE_AT;
+    return { x: state.pos.x + SIZE.w * at.x, y: state.pos.y + SIZE.h * at.y };
+  }
+
+  // Upside down, for hanging. A CSS rotate, so it stacks with the squash.
+  function setFlip(on) {
+    state.flipped = on;
+    svg.style.rotate = on ? '180deg' : '';
   }
 
   function squash(sx, sy) {
@@ -167,12 +195,14 @@
     }
   }
 
-  async function warp(to, kind = 'big') {
+  // A warp to a spot (a ledge, the top of the screen) lands exactly there and
+  // takes it up; any other warp leaves the spot she was on.
+  async function warp(to, kind = 'big', spot = null) {
     if (state.moving) return false;
     state.moving = true;
     const W = WARPS[kind];
     const from = center();
-    const dest = clampPos(to);
+    const dest = spot ? to : clampPos(to);
     const toC = { x: dest.x + SIZE.w / 2, y: dest.y + SIZE.h / 2 };
     try {
       await tween(W.charge, (t) => {
@@ -189,6 +219,8 @@
       if (W.streak) fx.streak(from.x, from.y, toC.x, toC.y);
       await sleep(W.gap);
 
+      state.spot = spot;
+      setFlip(spot?.kind === 'hang');
       state.pos = dest;
       place();
       wrap.style.visibility = '';
@@ -235,17 +267,81 @@
 
   async function idleAction() {
     const r = Math.random();
-    if (r < 0.3) await warp(nearbySpot(70, 220), 'hop');
-    else if (r < 0.52) await warp(randomSpot(), 'big');
-    else if (r < 0.7) await skitter();
-    else if (r < 0.86) rig.pulse(rand(0.4, 0.8), rand(80, 200));
+    if (r < 0.1) {
+      if (!(await perchOnWindow())) await warp(nearbySpot(70, 220), 'hop');
+    } else if (r < 0.16) await hangFromTop();
+    else if (r < 0.4) await warp(nearbySpot(70, 220), 'hop');
+    else if (r < 0.58) await warp(randomSpot(), 'big');
+    else if (r < 0.74) await skitter();
+    else if (r < 0.88) rig.pulse(rand(0.4, 0.8), rand(80, 200));
     else lookAround();
   }
 
-  async function arrive() {
-    wrap.style.visibility = 'hidden';
-    place();
-    await sleep(500);
+  // Sit on the top edge of the window you're in, if there's room above it
+  // for her head.
+  async function perchOnWindow() {
+    const frame = await bridge.activeWindow();
+    if (!frame || state.moving || chat.isOpen) return false;
+    const seat = SIZE.h * SEAT_AT;
+    const lo = Math.max(frame.x + 50, EDGE + SIZE.w * HIPS_AT);
+    const hi = Math.min(frame.x + frame.width - 50, innerWidth - EDGE - SIZE.w * (1 - HIPS_AT));
+    if (frame.y < 130 || frame.y > innerHeight - 40 || lo > hi) return false;
+    const spot = { kind: 'ledge', frame, until: performance.now() + rand(...SPOT_MS), nextCheck: 0 };
+    const ok = await warp({ x: rand(lo, hi) - SIZE.w * HIPS_AT, y: frame.y - seat }, 'big', spot);
+    if (ok && Math.random() < 0.4) say(pick(QUIPS.ledge), 2200);
+    return ok;
+  }
+
+  // Hang upside down off the top of the screen, her knees on the edge and
+  // her shins out of sight above it.
+  async function hangFromTop() {
+    const spot = { kind: 'hang', until: performance.now() + rand(...SPOT_MS) };
+    const ok = await warp({ x: rand(EDGE, innerWidth - SIZE.w - EDGE), y: -SIZE.h * (1 - KNEE_AT) }, 'big', spot);
+    if (ok && Math.random() < 0.4) say(pick(QUIPS.hang), 2200);
+    return ok;
+  }
+
+  // On a spot she stays put until it's time to go. Hanging, she also comes
+  // down when you open the chat or give her work; on a window, she falls off
+  // when it moves or you switch to another one.
+  function tendSpot(now) {
+    const { spot } = state;
+    if (!spot || state.moving) return;
+    if (now > spot.until) state.nextAction = now + rand(3000, 7000);
+    if (spot.kind === 'hang') {
+      if (chat.isOpen || state.replying || now > spot.until) warp({ x: state.pos.x, y: EDGE + rand(0, 80) }, 'hop');
+    } else if (now > spot.until) {
+      state.spot = null;
+    } else if (now > spot.nextCheck) {
+      spot.nextCheck = now + 700;
+      bridge.activeWindow().then((frame) => {
+        if (state.spot === spot && !sameFrame(frame, spot.frame)) fallOff();
+      });
+    }
+  }
+
+  function sameFrame(a, b) {
+    return Boolean(a && b) && a.id === b.id && ['x', 'y', 'width', 'height'].every((k) => Math.abs(a[k] - b[k]) < 3);
+  }
+
+  function fallOff() {
+    state.spot = null;
+    state.nextAction = performance.now() + rand(4000, 8000);
+    say(pick(QUIPS.fall), 1600);
+    rig.setMood('glitch', 1500);
+    act(() => warp({ x: state.pos.x + jitter(60), y: state.pos.y + rand(90, 200) }, 'hop'));
+  }
+
+  // Off the spot at once, right side up (you grabbed her, the screen changed).
+  function dropSpot() {
+    if (!state.spot && !state.flipped) return;
+    state.spot = null;
+    setFlip(false);
+    rig.pulse(0.6, 120);
+  }
+
+  // Tear in out of nothing where she stands (she starts hidden).
+  async function materialize() {
     const c = center();
     fx.glyphs(c.x, c.y, 10);
     fx.ring(c.x, c.y);
@@ -259,12 +355,65 @@
       rig.glitch = 1 - t;
     });
     rig.glitch = 0;
+  }
+
+  async function arrive() {
+    wrap.style.visibility = 'hidden';
+    place();
+    await sleep(500);
+    await materialize();
     say(pick(QUIPS.boot), 4200);
   }
 
-  async function summon(cursor) {
+  // You switched desktops and left her on the old one. She vanishes there,
+  // her window follows you over, and she tears back in on this one. On macOS
+  // she's on every Space while she follows you, so she's already here: she
+  // just warps somewhere new, unless she's busy with you.
+  async function followYou({ here = false } = {}) {
+    if (here) {
+      if (chat.isOpen || drag || state.summoning) return;
+      act(async () => {
+        if ((await warp(randomSpot(), 'big')) && Math.random() < 0.35) say(pick(QUIPS.follow), 2200);
+      });
+      return;
+    }
+    if (state.following) return;
+    state.following = true;
+    while (state.moving) await nextFrame();
+    state.moving = true;
+    try {
+      wrap.style.visibility = 'hidden';
+      hideBubble();
+      await nextFrame();
+      await nextFrame();
+      if (!(await bridge.follow())) return;
+      if (!chat.isOpen) state.pos = randomSpot();
+      place();
+      await sleep(rand(120, 320));
+      await materialize();
+      if (!chat.isOpen && Math.random() < 0.35) say(pick(QUIPS.follow), 2200);
+    } finally {
+      rig.glitch = 0;
+      squash(1, 1);
+      wrap.style.visibility = '';
+      state.moving = false;
+      state.following = false;
+      refreshHover();
+    }
+  }
+
+  // A selection from Neovim rides along; if she's already out, she just
+  // takes the new one. When the summon opens her chat, she also takes a look
+  // at the screenshot it took.
+  // Out loud (push-to-talk, or "Capri, …"), what you said is sent once she's
+  // there; a bare "Capri" gets a "yeah?" and she listens for the rest.
+  async function summon({ selection, look, heard, woke, ...cursor }) {
+    if (selection) chat.attach('selection', selection);
     if (chat.isOpen) {
-      closeChat();
+      if (heard) send(heard, { voice: true });
+      else if (selection || woke) openChat();
+      else closeChat();
+      if (woke && !heard) speak(pick(QUIPS.woke), 'reply');
       return;
     }
     state.summoning = true;
@@ -274,10 +423,41 @@
     state.summoning = false;
     rig.setMood('hype', 2500);
     openChat();
+    if (look === 'ready') glance();
+    else if (look === 'blocked' && !state.toldBlind) {
+      state.toldBlind = true;
+      chat.addSys(
+        "i can't see your screen: give Screen Recording to Electron (or to your terminal, if you start me from one) in System Settings › Privacy & Security, then restart me. or untick \"Look at my screen when summoned\" in my menu.",
+      );
+    }
+    if (heard) send(heard, { voice: true });
+    else if (woke) speak(pick(QUIPS.woke), 'reply');
+  }
+
+  // One look at your screen: a line about it in the chat, and what she saw
+  // as a chip that goes along with your next message.
+  function glance() {
+    chat.setStatus('look');
+    state.glance = bridge.look().then((seen) => {
+      state.glance = null;
+      if (!state.replying) chat.setStatus(chat.pendingAsk !== null ? 'ask' : 'ok');
+      if (!seen) return;
+      rig.setMood(seen.mood, 5000);
+      // You closed the chat meanwhile: she just says it.
+      if (!chat.isOpen) {
+        if (seen.comment) say(seen.comment, 4500);
+        return;
+      }
+      if (seen.comment) chat.addCapri(seen.comment);
+      if (seen.comment && !state.voiceTurn) speak(seen.comment, 'aside');
+      if (seen.summary) chat.attach('screen', seen);
+    });
   }
 
   function behave(now) {
     if (state.acting || state.moving || drag || rig.sleeping) return;
+    tendSpot(now);
+    if (state.spot) return;
     if (now >= state.nextQuip) {
       state.nextQuip = now + rand(45000, 100000);
       if (!chat.isOpen && Math.random() < 0.6) say(pick(QUIPS.idle));
@@ -290,6 +470,8 @@
   }
 
   function updateGaze(now) {
+    // Upside down, "left" and "up" swap ends in her own frame.
+    const turn = state.flipped ? -1 : 1;
     if (state.gazeOverride && now < state.gazeOverride.until) {
       rig.lookAt(state.gazeOverride.x, state.gazeOverride.y);
       return;
@@ -304,7 +486,7 @@
     } else {
       target = { x: innerWidth / 2, y: innerHeight / 2 };
     }
-    rig.lookAt((target.x - c.x) / 300, (target.y - c.y) / 300);
+    rig.lookAt((turn * (target.x - c.x)) / 300, (turn * (target.y - c.y)) / 300);
   }
 
   // ---- poses -------------------------------------------------------------
@@ -317,13 +499,15 @@
 
   // Working: typing into the air. Waiting on a permission: pointing at the
   // card. Between jobs she perches, crosses her legs, lies back or floats,
-  // and if you leave her alone long enough she curls up and sleeps.
+  // sits on your window or hangs off the top of the screen, and if you leave
+  // her alone long enough she curls up and sleeps.
   function choosePose(now) {
     if (state.poseOverride && now < state.poseOverride.until) return state.poseOverride.pose;
     state.poseOverride = null;
     if (drag) return 'float';
     if (chat.pendingAsk !== null && chat.isOpen) return 'point';
     if (state.replying) return state.working;
+    if (state.spot) return state.spot.kind;
     if (!chat.isOpen && now - state.lastActivity > SLEEP_AFTER) return 'sleep';
     if (now > state.idlePoseUntil) {
       let next = weighted(IDLE_POSES);
@@ -455,6 +639,7 @@
       const dy = e.clientY - drag.sy;
       if (!drag.moved && Math.hypot(dx, dy) > 5) {
         drag.moved = true;
+        dropSpot();
         rig.setMood('glitch', 1500);
       }
       if (drag.moved) {
@@ -512,10 +697,11 @@
   });
 
   addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && chat.isOpen) escape(false);
+    if (e.key === 'Escape' && chat.isOpen) closeChat();
   });
 
   addEventListener('resize', () => {
+    dropSpot();
     state.pos = clampPos(state.pos);
     place();
   });
@@ -532,10 +718,14 @@
     syncOverlays();
   }
 
+  // Closing the chat also hands the keyboard back to the app you summoned
+  // her from, so you can go straight back to typing there.
   function closeChat() {
     chat.close();
+    chat.takeContext();
     state.nextAction = performance.now() + rand(2500, 5000);
     refreshHover();
+    bridge.release();
   }
 
   function toggleChat() {
@@ -543,31 +733,53 @@
     else openChat();
   }
 
-  // Esc stops her mid-task, like in the CLI; otherwise it closes the panel.
-  async function escape(closeOnly) {
-    if (!closeOnly && state.replying && (await bridge.interrupt())) {
+  // Ctrl+C or /stop stops her mid-task, like in the CLI. Esc only puts her
+  // away: summon, ask, Esc, and she keeps working while you code.
+  async function stop() {
+    if (state.replying && (await bridge.interrupt())) {
       chat.addSys('interrupted. what now?');
       rig.setMood('annoyed', 2500);
-      return;
+    } else {
+      chat.addSys('nothing running.');
     }
-    closeChat();
   }
 
-  function send(text) {
-    if (text.startsWith('/')) {
+  // `voice`: you said it (push-to-talk or the wake word), so she says the
+  // answer back.
+  async function send(text, { voice = false } = {}) {
+    if (text.startsWith('/') && !voice) {
       command(text);
       return;
     }
     // Typing while a permission card waits answers it: no, do this instead.
+    // Out loud, a plain "yes" / "no" works too.
     const ask = chat.pendingAsk;
     if (ask !== null) {
-      chat.addUser(text);
-      chat.answer(ask, 'deny', text);
+      chat.addUser(text, voice ? ['🎙'] : []);
+      const yes = voice && /^\W*(yes|yeah|yep|sure|ok|okay|go|allow|do it|oui|ouais|vas-y|d'accord)\b/i.test(text);
+      const no = voice && /^\W*(no|nope|nah|stop|cancel|non|annule)\W*$/i.test(text);
+      chat.answer(ask, yes ? 'allow' : 'deny', yes || no ? undefined : text);
       return;
     }
-    chat.addUser(text);
+    state.voiceTurn = voice;
+    let context = chat.takeContext();
+    chat.addUser(text, [voice && '🎙', context.selection && `⧉ ${context.selection.label}`, context.screen && '◉ screen'].filter(Boolean));
     startWork();
-    bridge.chat(text);
+    // Asked before she finished looking: what she saw still goes along, if
+    // it comes in time.
+    if (state.glance && !context.screen) {
+      await Promise.race([state.glance, sleep(6000)]);
+      context = { ...context, ...chat.takeContext() };
+    }
+    bridge.chat(text, { ...context, voice });
+  }
+
+  // She says it out loud, if you let her talk. 'reply': you talked to her.
+  // 'aside': her one-liners and notices, which main keeps quiet during calls.
+  async function speak(text, kind) {
+    if (!state.info.talk || !text) return;
+    const wav = await bridge.synth(text, kind).catch(() => null);
+    if (wav) voice.play(wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength));
   }
 
   function startWork() {
@@ -579,10 +791,11 @@
   }
 
   const LOCAL_HELP = [
-    '/new fresh conversation · /stop stop working · /resume pick up my last session here',
+    '/new fresh conversation · /stop or ctrl+c stop working · /resume pick up my last session here',
     '/cd <folder> where i work · /mode default|acceptEdits|plan|auto · /model auto|<name>',
     '/hooks on|off hear from your other claude code sessions · /quiet toggle my commentary',
-    '/pose [name] strike a pose · /warp · esc stop or close · ctrl+shift+space summon',
+    '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|off talk out loud · /ptt on|off push-to-talk',
+    `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
@@ -594,7 +807,7 @@
     } else if (lower === 'new' || lower === 'reset' || lower === 'clear') {
       bridge.reset();
     } else if (lower === 'stop') {
-      escape(false);
+      stop();
     } else if (lower === 'warp') {
       act(() => warp(randomSpot(), 'big'));
     } else if (lower === 'pose') {
@@ -605,7 +818,7 @@
       } else {
         chat.addSys(`poses: ${rig.poses.join(' · ')} (i hold one for a minute)`);
       }
-    } else if (['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands'].includes(lower)) {
+    } else if (['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt'].includes(lower)) {
       chat.addUser(text);
       const result = await bridge.command(lower, arg);
       if (result.error) {
@@ -625,7 +838,10 @@
   // The reply bubble currently streaming, if any. Each message between tool
   // calls gets its own bubble.
   function closeReply() {
-    if (reply) reply.finish();
+    if (reply) {
+      reply.finish();
+      if (reply.text.trim()) state.lastReply = reply.text;
+    }
     reply = null;
   }
 
@@ -665,6 +881,8 @@
       say(`${pick(QUIPS.ask)} ${p.summary}`, 9000);
       cutIn('curious');
     }
+    // Asked out loud: she asks out loud too, and a spoken "yes" answers.
+    if (state.voiceTurn) speak(`${pick(QUIPS.ask)} ${p.summary}`, 'reply');
   });
 
   bridge.on('agent:permission-closed', ({ id }) => {
@@ -678,6 +896,10 @@
 
   bridge.on('agent:done', (result) => {
     endWork();
+    // You asked out loud: her last message is the spoken answer.
+    const spoken = state.voiceTurn;
+    state.voiceTurn = false;
+    if (spoken && result.ok && !result.interrupted) speak(state.lastReply, 'reply');
     if (result.interrupted) return;
     if (!result.ok) {
       chat.addSys(result.subtype === 'error_max_turns' ? 'hit the turn limit. say "continue" and i keep going.' : `that run broke: ${result.text || result.subtype}`);
@@ -734,6 +956,7 @@
     } else {
       say(n.project && n.kind !== 'quip' ? `[${n.project}] ${n.text}` : n.text, n.kind === 'quip' ? 4500 : 7000);
     }
+    if (!n.quiet) speak(n.text, 'aside');
     if (n.kind === 'done') celebrate();
     else if (n.kind === 'attention') {
       touch();
@@ -754,7 +977,34 @@
   }
 
   bridge.on('summon', (cursor) => summon(cursor));
+  // Main says which inputs to open: the mic (log, wake word, push-to-talk)
+  // and, on Windows, the computer's audio.
+  bridge.on('ears', (want) => mic.set(want));
+  // Push-to-talk: listening while the key is down, then transcribing.
+  bridge.on('ptt', (phase) => {
+    if (phase === 'listening') {
+      touch();
+      strikePose('think', 60000);
+      rig.setMood('curious', 3000);
+      if (chat.isOpen) chat.setStatus('listen');
+      else say('● listening…', 60000);
+    } else if (phase === 'thinking') {
+      if (chat.isOpen) chat.setStatus('busy');
+      else say('…', 8000);
+    } else {
+      state.poseOverride = null;
+      if (!state.replying) chat.setStatus(chat.pendingAsk !== null ? 'ask' : 'ok');
+      if (phase === 'missed') say(pick(QUIPS.missed), 1800);
+      else if (!chat.isOpen) hideBubble();
+    }
+  });
   bridge.on('warp', () => act(() => warp(randomSpot(), 'big')));
+  // A warp leaves her spot on its own; the other way over, she reappears
+  // somewhere new, so she drops it first.
+  bridge.on('workspace', (info) => {
+    if (!info?.here) dropSpot();
+    followYou(info);
+  });
   bridge.on('wander', (on) => {
     state.wander = on;
     say(on ? 'free roam: ON' : "ok ok, i'll sit still.", 1800);
@@ -786,7 +1036,8 @@
     rig.drift((state.pos.x - lastPos.x) * v, (state.pos.y - lastPos.y) * v);
     lastPos = { ...state.pos };
     updateGaze(now);
-    rig.talking = chat.typing;
+    // Her jaw moves with the text as it types out, and with her voice.
+    rig.talking = chat.typing || voice.level > 0.015;
     updatePose(now);
     rig.tick(now);
     // The close-ups copy her face whenever the rig steps a frame.

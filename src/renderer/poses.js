@@ -94,6 +94,20 @@ window.Capri = window.Capri || {};
       torso: 6, head: -5, lift: [0, 22], front: ['legB', 'armB'],
       fidget: [['legA', 2, 10, 0.9, 0], ['armB', 2, 6, 0.5, 1]],
     },
+    // Sitting on the top edge of your window, hands on the edge, legs
+    // dangling in front of it and kicking in turn. Her seat is at SEAT_Y.
+    ledge: {
+      legA: [172, -96, -14], legB: [8, 96, 14], armA: [104, -14, 40], armB: [76, 14, -40],
+      fidget: [['legA', 1, 14, 0.7, 0], ['legB', 1, 14, 0.7, Math.PI], ['legA', 2, 10, 0.7, 1], ['legB', 2, 10, 0.7, 4.1]],
+    },
+    // Hanging off the top of the screen by her knees. The rig is drawn
+    // upside down for this one (app.js flips it), so her legs point down
+    // here and her arms up, dangling. Her knees are at KNEE_Y.
+    hang: {
+      legA: [95, 2, 20], legB: [85, -2, -20], armA: [-114, 14, 10], armB: [-66, -14, -10],
+      head: 4,
+      fidget: [['armA', 0, 6, 0.6, 0], ['armB', 0, 6, 0.6, 0.6], ['armA', 1, 8, 0.6, 1], ['armB', 1, 8, 0.6, 1.6]],
+    },
     // Floating cross-legged, hands out front, typing into the air: Claude
     // Code is working.
     hack: {
@@ -311,4 +325,9 @@ window.Capri = window.Capri || {};
 
   window.Capri.Limbs = Limbs;
   window.Capri.POSES = POSES;
+  // Where she meets an edge, in art units: her seat on a ledge, her knees
+  // when she hangs, and her hips across.
+  window.Capri.SEAT_Y = 468;
+  window.Capri.KNEE_Y = LIMBS.legA.root[1] + LIMBS.legA.segs[0][0];
+  window.Capri.HIPS_X = (LIMBS.legA.root[0] + LIMBS.legB.root[0]) / 2;
 })();

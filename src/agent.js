@@ -6,7 +6,7 @@
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { z } = require('zod');
-const { AGENT_PROMPT } = require('./persona');
+const { AGENT_PROMPT, transcriptPrompt } = require('./persona');
 
 let sdk = null;
 const loadSdk = async () => (sdk ??= await import('@anthropic-ai/claude-agent-sdk')); // ESM-only
@@ -89,6 +89,7 @@ class Agent extends EventEmitter {
     this.session = null;
     this.sessionId = null;
     this.resumeId = null;
+    this.transcripts = null; // her always-on transcript folder, which she may read
     this.busy = false;
     this.idleSince = 0;
     this.interrupted = false;
@@ -215,7 +216,8 @@ class Agent extends EventEmitter {
         effort: this.fixed ? undefined : TIERS[this.tier].effort,
         permissionMode: this.mode,
         resume: this.resumeId ?? undefined,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: AGENT_PROMPT },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: this.transcripts ? `${AGENT_PROMPT}\n\n${transcriptPrompt(this.transcripts)}` : AGENT_PROMPT },
+        additionalDirectories: this.transcripts ? [this.transcripts] : undefined,
         includePartialMessages: true,
         // She asks her questions in chat instead of through a dialog.
         disallowedTools: ['AskUserQuestion'],

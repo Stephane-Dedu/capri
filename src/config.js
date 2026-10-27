@@ -10,6 +10,12 @@ const DEFAULTS = {
   model: process.env.CAPRI_MODEL || '',
   reactions: true,
   wander: true,
+  follow: true, // follow you to whichever desktop / Space you switch to
+  look: true, // one look at your screen each time you summon her
+  listen: false, // the always-on transcript (mic + computer audio)
+  wake: false, // listen for "Capri"
+  ptt: true, // hold a key to talk to her
+  talk: true, // she answers out loud when you talked to her
   sessions: {}, // project folder -> her last session there, for /resume
 };
 

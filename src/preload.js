@@ -3,6 +3,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 const INCOMING = [
   'summon',
   'warp',
+  'workspace',
+  'ears',
+  'ptt',
   'wander',
   'reset',
   'notice',
@@ -24,9 +27,16 @@ const INCOMING = [
 
 contextBridge.exposeInMainWorld('bridge', {
   setMouseThrough: (through) => ipcRenderer.send('capri:mouse', through),
-  chat: (text) => ipcRenderer.send('capri:chat', text),
+  chat: (text, context) => ipcRenderer.send('capri:chat', text, context),
   answer: (id, choice, note) => ipcRenderer.send('capri:answer', { id, choice, note }),
   interrupt: () => ipcRenderer.invoke('capri:interrupt'),
+  follow: () => ipcRenderer.invoke('capri:follow'),
+  release: () => ipcRenderer.send('capri:release'),
+  look: () => ipcRenderer.invoke('capri:look'),
+  activeWindow: () => ipcRenderer.invoke('capri:active-window'),
+  audio: (source, samples) => ipcRenderer.send('capri:audio', source, samples),
+  speaking: (ms) => ipcRenderer.send('capri:speaking', ms),
+  synth: (text, kind) => ipcRenderer.invoke('capri:synth', text, kind),
   command: (name, arg) => ipcRenderer.invoke('capri:command', { name, arg }),
   reset: () => ipcRenderer.send('capri:reset'),
   menu: () => ipcRenderer.send('capri:menu'),

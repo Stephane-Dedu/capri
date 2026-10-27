@@ -2,6 +2,9 @@
 
 window.Capri = window.Capri || {};
 
+const SUMMON_KEY = /Macintosh/.test(navigator.userAgent) ? 'cmd+shift+space' : 'ctrl+shift+space';
+window.Capri.SUMMON_KEY = SUMMON_KEY;
+
 window.Capri.QUIPS = {
   boot: [
     'Hi, little baby! new host, new sky.',
@@ -19,10 +22,16 @@ window.Capri.QUIPS = {
     'is that a satellite up there? ...could i reach it?',
     "*cackles* nothing. i didn't do anything.",
     'Who are you tryna haze, staring at me like that?',
-    'ctrl+shift+space. you know you want to.',
+    `${SUMMON_KEY}. you know you want to.`,
     'your desktop needs more chaos. i volunteer.',
   ],
   dodge: ['Naw, c\'mon!', 'too slow, little baby~', 'Not yet.', "can't catch static."],
+  woke: ['yeah?', 'mm?', "what's up?", 'Yessir?', 'talk to me.'],
+  missed: ["didn't catch that.", 'huh? again?', '...static. say it again?'],
+  ledge: ['nice window. mine now.', 'comfy up here.', "don't mind me. just sitting on your work.", 'Yessir, front-row seat.'],
+  hang: ['hi from up here~', 'the view is better upside down.', '*swings* bored. b-bored.', 'Who are you tryna haze? i live up here now.'],
+  fall: ['whoa—!', 'hey! i was sitting there.', 'Naw, c\'mon!', 'rude. RUDE.'],
+  follow: ['wait up!', 'new desktop, same me.', "can't ditch me that easy, choom.", '*bzzt* found you.', 'ooh, you redecorated.'],
   drop: ['hey!', 'rude.', 'Yessir, new spot.', 'wheee—', 'Who are you tryna haze?'],
   waiting: ['psst. i answered you.', 'reply waiting~ click me.'],
   wake: ["*bzzt* i'm up, i'm up.", 'wha— Not yet. ...ok, now.', 'i was NOT asleep.'],
