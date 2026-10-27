@@ -1,0 +1,18 @@
+{
+  "name": "capri",
+  "version": "0.1.0",
+  "description": "Capri: a glitchy, teleporting Claude desktop companion",
+  "main": "src/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "hooks": "node src/hooks.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.310",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0"
+  }
+}

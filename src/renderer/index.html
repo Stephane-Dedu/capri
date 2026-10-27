@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    />
+    <title>Capri</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <canvas id="fx"></canvas>
+
+    <div id="capri"><svg id="rig" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+    <div id="bubble" hidden></div>
+
+    <div id="cutin" hidden><svg id="cutinFace" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+    <section id="chat" class="hit" hidden>
+      <div class="frame">
+        <header>
+          <svg id="avatar" xmlns="http://www.w3.org/2000/svg"></svg>
+          <span class="name">CAPRI</span>
+          <span class="sub">//netlink</span>
+          <span id="brain" hidden></span>
+          <span id="mode" hidden></span>
+          <span id="status" data-kind="ok">online</span>
+          <button id="close" type="button" title="Close (Esc)">✕</button>
+        </header>
+        <div id="log"></div>
+        <form id="ask" autocomplete="off">
+          <span class="caret">&gt;</span>
+          <textarea id="input" rows="1" spellcheck="false" maxlength="8000" placeholder="tell me what to build, little baby…"></textarea>
+        </form>
+      </div>
+    </section>
+
+    <script src="quips.js"></script>
+    <script src="fx.js"></script>
+    <script src="art.js"></script>
+    <script src="portrait-art.js"></script>
+    <script src="mouth.js"></script>
+    <script src="poses.js"></script>
+    <script src="rig.js"></script>
+    <script src="portrait.js"></script>
+    <script src="chat.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

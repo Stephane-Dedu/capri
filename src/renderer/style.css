@@ -1,0 +1,606 @@
+:root {
+  --pink: #ff2a6d;
+  --purple: #a73cff;
+  --green: #3dff8f;
+  --cyan: #00f0ff;
+  --ink: #07060b;
+  --white: #f4f7ff;
+  --mono: "Cascadia Code", "Cascadia Mono", Consolas, "JetBrains Mono", monospace;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+  user-select: none;
+}
+
+#fx {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ---- Capri ------------------------------------------------------------ */
+
+#capri {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+#rig {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  transform-origin: 50% 55%;
+  filter: drop-shadow(0 0 6px rgba(255, 42, 109, 0.35));
+}
+
+#rig #main {
+  pointer-events: visiblePainted;
+  cursor: grab;
+}
+
+/* ---- speech bubble ---------------------------------------------------- */
+
+#bubble {
+  position: fixed;
+  left: 0;
+  top: 0;
+  max-width: 240px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--white);
+  background: var(--ink);
+  border: 1.5px solid var(--pink);
+  box-shadow: 3px 3px 0 var(--purple), -2px 0 0 var(--cyan);
+  pointer-events: none;
+}
+
+#bubble[hidden] {
+  display: none;
+}
+
+/* ---- chat panel ------------------------------------------------------- */
+
+#chat {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 420px;
+  max-height: min(72vh, 680px);
+  display: flex;
+  padding: 2px;
+  background: linear-gradient(135deg, var(--pink), var(--purple) 60%, var(--green));
+  clip-path: polygon(0 0, calc(100% - 20px) 0, 100% 20px, 100% 100%, 20px 100%, 0 calc(100% - 20px));
+}
+
+#chat[hidden] {
+  display: none;
+}
+
+#chat .frame {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 6, 14, 0.96);
+  color: var(--white);
+  clip-path: polygon(0 0, calc(100% - 19px) 0, 100% 19px, 100% 100%, 19px 100%, 0 calc(100% - 19px));
+}
+
+#chat .frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 3px);
+}
+
+#chat header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 48px 6px 10px;
+  border-bottom: 1px solid rgba(255, 42, 109, 0.35);
+}
+
+#avatar {
+  width: 46px;
+  height: 36px;
+  flex: none;
+  background: var(--ink);
+  clip-path: polygon(0 0, 100% 0, 100% 75%, 85% 100%, 0 100%);
+}
+
+#chat .name {
+  color: var(--pink);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-shadow: -1px 0 var(--cyan), 1px 0 var(--pink);
+  animation: name-jitter 2.6s steps(1) infinite;
+}
+
+#chat .sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--purple);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#chat header > :not(.sub) {
+  flex: none;
+  white-space: nowrap;
+}
+
+#mode {
+  padding: 0 5px;
+  border: 1px solid var(--purple);
+  color: var(--purple);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#mode[hidden],
+#brain[hidden] {
+  display: none;
+}
+
+/* Which model is answering: quiet for the fast one, lit up for the big one. */
+#brain {
+  padding: 0 5px;
+  border: 1px solid rgb(0 240 255 / 0.45);
+  color: var(--cyan);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#brain[data-tier="deep"] {
+  border-color: var(--pink);
+  color: var(--pink);
+  text-shadow: 0 0 6px var(--pink);
+}
+
+#status {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--green);
+}
+
+#status::before {
+  content: "● ";
+}
+
+#status[data-kind="busy"],
+#status[data-kind="work"] {
+  color: var(--pink);
+  animation: blink 0.5s steps(1) infinite;
+}
+
+#status[data-kind="ask"] {
+  color: var(--cyan);
+  animation: blink 0.9s steps(1) infinite;
+}
+
+#close {
+  position: absolute;
+  top: 6px;
+  right: 22px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--white);
+  opacity: 0.55;
+  font: inherit;
+  cursor: pointer;
+}
+
+#close:hover {
+  opacity: 1;
+  color: var(--pink);
+}
+
+#log {
+  flex: 1;
+  min-height: 60px;
+  overflow-y: auto;
+  padding: 10px 12px 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  user-select: text;
+}
+
+#log::-webkit-scrollbar {
+  width: 6px;
+}
+
+#log::-webkit-scrollbar-thumb {
+  background: var(--pink);
+}
+
+.msg {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.msg.user {
+  color: var(--green);
+}
+
+.msg.user::before {
+  content: "> ";
+  opacity: 0.7;
+}
+
+.msg.capri {
+  padding-left: 8px;
+  border-left: 2px solid var(--pink);
+}
+
+.msg.capri.typing {
+  border-left-color: var(--green);
+}
+
+.msg.sys {
+  color: #b89aff;
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+.msg code {
+  padding: 0 3px;
+  background: rgba(61, 255, 143, 0.1);
+  color: var(--green);
+  font-family: var(--mono);
+}
+
+.msg pre {
+  margin: 6px 0;
+  padding: 8px;
+  overflow-x: auto;
+  background: #0f0c18;
+  border-left: 2px solid var(--green);
+  cursor: copy;
+}
+
+.msg pre code {
+  padding: 0;
+  background: none;
+  color: #d8ffe9;
+  font-size: 12px;
+}
+
+.msg pre.copied {
+  border-left-color: var(--pink);
+}
+
+.scr {
+  color: var(--pink);
+  opacity: 0.8;
+}
+
+/* tool activity: one box per run of tool calls */
+
+.tools {
+  margin: 0 0 10px;
+  padding: 3px 0 3px 8px;
+  border-left: 2px solid rgba(167, 60, 255, 0.6);
+  font-size: 11.5px;
+  color: rgba(244, 247, 255, 0.62);
+}
+
+.tools .more {
+  color: var(--purple);
+  cursor: pointer;
+}
+
+.tools .more[hidden],
+.tools:not(.open) .tool.old {
+  display: none;
+}
+
+.tool {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool i {
+  display: inline-block;
+  width: 1.4em;
+  font-style: normal;
+}
+
+.tool.running i::before {
+  content: "▸";
+  color: var(--pink);
+  animation: blink 0.4s steps(1) infinite;
+}
+
+.tool.ok i::before {
+  content: "✓";
+  color: var(--green);
+}
+
+.tool.err i::before {
+  content: "✗";
+  color: var(--pink);
+}
+
+.tool.err {
+  color: rgba(255, 120, 150, 0.85);
+}
+
+/* permission prompts */
+
+.msg.perm {
+  padding: 8px 10px;
+  border: 1px solid var(--cyan);
+  background: rgba(0, 240, 255, 0.06);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+}
+
+.perm .head {
+  color: var(--cyan);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.perm .what {
+  margin: 2px 0 6px;
+  color: var(--white);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.perm .why {
+  margin-bottom: 6px;
+  color: rgba(244, 247, 255, 0.6);
+  font-size: 11.5px;
+}
+
+.perm pre.detail {
+  max-height: 170px;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  font-size: 11.5px;
+  color: #d8ffe9;
+}
+
+.perm pre.detail .add {
+  color: var(--green);
+}
+
+.perm pre.detail .del {
+  color: #ff7a9c;
+}
+
+.perm .plan {
+  max-height: 260px;
+  margin-bottom: 8px;
+  overflow-y: auto;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12px;
+}
+
+.perm .choices {
+  display: flex;
+  gap: 8px;
+}
+
+.perm button {
+  padding: 3px 12px;
+  border: 1px solid var(--green);
+  background: rgba(61, 255, 143, 0.1);
+  color: var(--green);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.perm button[data-choice="always"] {
+  border-color: var(--purple);
+  background: rgba(167, 60, 255, 0.12);
+  color: #c99bff;
+}
+
+.perm button[data-choice="deny"] {
+  margin-left: auto;
+  border-color: var(--pink);
+  background: rgba(255, 42, 109, 0.1);
+  color: var(--pink);
+}
+
+.perm button:hover {
+  filter: brightness(1.4);
+}
+
+.perm.answered {
+  padding: 4px 10px;
+  opacity: 0.6;
+}
+
+.perm.answered .head {
+  display: none;
+}
+
+.perm.answered .what {
+  margin: 0;
+  font-weight: 400;
+}
+
+.perm .verdict {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.perm.yes .verdict {
+  color: var(--green);
+}
+
+.perm.no .verdict {
+  color: var(--pink);
+}
+
+/* other Claude Code sessions, and her asides */
+
+.msg.notice {
+  font-size: 12px;
+  color: #ffd1de;
+}
+
+.msg.notice .tag {
+  margin-right: 6px;
+  padding: 0 4px;
+  background: rgba(167, 60, 255, 0.35);
+  color: var(--white);
+  font-size: 10.5px;
+}
+
+.msg.notice.done::before {
+  content: "✓ ";
+  color: var(--green);
+}
+
+.msg.notice.attention::before {
+  content: "▲ ";
+  color: var(--cyan);
+}
+
+.msg.notice.failed::before {
+  content: "✗ ";
+  color: var(--pink);
+}
+
+.msg.notice.quip {
+  font-style: italic;
+  color: rgba(255, 209, 222, 0.8);
+}
+
+#ask {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 14px 12px 12px;
+  border-top: 1px solid rgba(255, 42, 109, 0.35);
+}
+
+#ask .caret {
+  color: var(--pink);
+  line-height: 1.45;
+}
+
+#input {
+  flex: 1;
+  max-height: 120px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--white);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  caret-color: var(--green);
+}
+
+#input::placeholder {
+  color: rgba(244, 247, 255, 0.35);
+}
+
+/* ---- cut-in: an anime close-up of her face for big moments -------------- */
+
+#cutin {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 270px;
+  height: 160px;
+  padding: 3px 4px;
+  background: linear-gradient(100deg, var(--pink), var(--purple));
+  clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
+  pointer-events: none;
+}
+
+#cutin[hidden] {
+  display: none;
+}
+
+#cutin svg {
+  width: 100%;
+  height: 100%;
+  background:
+    repeating-linear-gradient(100deg, transparent 0 22px, rgba(255, 255, 255, 0.05) 22px 24px),
+    var(--ink);
+  clip-path: polygon(6% 0, 100% 0, 94% 100%, 0 100%);
+}
+
+#cutin.out {
+  animation: cutin-out 220ms steps(1, end) both;
+}
+
+@keyframes cutin-out {
+  0% { transform: none; }
+  30% { transform: translateX(10px) scaleY(0.6); clip-path: inset(30% 0 20% 0); }
+  60% { transform: translateX(-14px) scaleY(0.08); }
+  100% { transform: scaleY(0); opacity: 0; }
+}
+
+/* ---- glitch animations ------------------------------------------------ */
+
+.glitch-in {
+  animation: glitch-in 300ms steps(1, end) both;
+}
+
+.shake {
+  animation: shake 220ms steps(1, end);
+}
+
+@keyframes glitch-in {
+  0% { opacity: 0; transform: scale(1.4, 0.03); }
+  20% { opacity: 1; transform: scale(1, 0.03); }
+  40% { transform: scale(1, 1.06) translateX(8px); clip-path: inset(12% 0 38% 0); }
+  60% { transform: translateX(-6px); clip-path: inset(48% 0 6% 0); }
+  80% { transform: translateX(3px); clip-path: inset(0 0 0 0); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes shake {
+  0% { transform: translateX(-6px); }
+  25% { transform: translateX(5px); }
+  50% { transform: translateX(-3px); }
+  75% { transform: translateX(2px); }
+  100% { transform: none; }
+}
+
+@keyframes name-jitter {
+  0%, 86%, 100% { transform: none; }
+  88% { transform: translate(-2px, 1px); text-shadow: -3px 0 var(--cyan), 3px 0 var(--pink); }
+  91% { transform: translate(2px, -1px); }
+  94% { transform: translate(-1px, 0); text-shadow: 2px 0 var(--cyan), -2px 0 var(--green); }
+}
+
+@keyframes blink {
+  50% { opacity: 0.3; }
+}
