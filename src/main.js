@@ -1,6 +1,6 @@
 const os = require('node:os');
 const path = require('node:path');
-const { app, BrowserWindow, screen, ipcMain, Tray, Menu, globalShortcut, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Tray, Menu, globalShortcut, nativeImage, dialog, shell } = require('electron');
 
 try {
   process.loadEnvFile(path.join(__dirname, '..', '.env'));
@@ -17,6 +17,7 @@ const look = require('./look');
 const { frontmost } = require('./frontmost');
 const { setupHearing } = require('./hearing');
 const costs = require('./costs');
+const memory = require('./memory');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -339,6 +340,7 @@ function buildMenu() {
     { label: 'Look at my screen when summoned', type: 'checkbox', checked: cfg.look, click: (item) => setLook(item.checked) },
     { type: 'separator' },
     ...(hearing?.menu() ?? []),
+    { label: 'Open her notes about me', click: () => shell.openPath(memory.file()) },
     { label: 'Warp somewhere', click: () => send('warp') },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
@@ -509,6 +511,10 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       }
       send('agent:info', info());
       return { text: costs.cap ? `daily cap: $${costs.cap} (today so far $${costs.total.toFixed(2)})` : 'no daily cap.' };
+    }
+    case 'memory': {
+      const lines = memory.notes();
+      return { text: lines.length ? `what i remember about you:\n${lines.join('\n')}` : "i don't have notes about you yet." };
     }
     default:
       return { error: `unknown command /${name}` };

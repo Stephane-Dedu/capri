@@ -64,6 +64,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/hooks on\|off` | Install or remove the Claude Code hooks |
 | `/quiet` | Toggle her commentary on what you do |
 | `/wake`, `/listen`, `/talk`, `/ptt` `on\|off` | The "Capri" wake word, the always-on transcript, talking out loud, push-to-talk (same as the tray) |
+| `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
 | `/warp`, `/help` | Teleport somewhere / show this list |
@@ -99,6 +100,7 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 
 ### Routines
 
+- **Her notes about you**: she saves short facts with her own `remember` / `forget` tools (no permission card) when she learns something that'll still matter next week, and reads them at the start of every conversation. `/memory` shows them, **Open her notes about me** in the tray opens the file to edit, and "forget that…" works in chat.
 - **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
 
 ### Agent routing
@@ -239,6 +241,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: the OS speech synthesizer, French or English
+  memory.js      Her notes about you, and her remember / forget tools
   costs.js       Today's spend per model, and the daily cap
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
   config.js      Saved settings

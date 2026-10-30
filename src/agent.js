@@ -7,6 +7,7 @@ const path = require('node:path');
 const { EventEmitter } = require('node:events');
 const { z } = require('zod');
 const { AGENT_PROMPT, transcriptPrompt } = require('./persona');
+const memory = require('./memory');
 
 let sdk = null;
 const loadSdk = async () => (sdk ??= await import('@anthropic-ai/claude-agent-sdk')); // ESM-only
@@ -22,6 +23,8 @@ const TIERS = {
   deep: { model: process.env.CAPRI_DEEP_MODEL || 'claude-opus-5-5', effort: 'high' },
 };
 const ESCALATE = 'mcp__capri__escalate';
+// Her own in-process tools (the hand-off, her notes) never need your OK.
+const OWN_TOOLS = /^mcp__capri__/;
 // Follow-ups this soon after a job on the strong model stay on it.
 const STICKY_MS = 10 * 60000;
 const DEEP_HINTS =
@@ -208,6 +211,21 @@ class Agent extends EventEmitter {
       // Loaded up front, so the fast model sees it without a tool search.
       { alwaysLoad: true },
     );
+    // Her notes about you (memory.js), which she keeps herself.
+    const remember = tool(
+      'remember',
+      "Save one short, durable note about the user for future conversations: their name, how they like to work, preferences, ongoing projects, what they shipped, running jokes. Not task details, not anything secret. One fact per call.",
+      { fact: z.string().describe('The note, one sentence') },
+      async ({ fact }) => ({ content: [{ type: 'text', text: memory.remember(fact) }] }),
+      { alwaysLoad: true },
+    );
+    const forget = tool(
+      'forget',
+      'Delete your notes about the user that contain this text: when they ask you to forget something, or a note turned out wrong.',
+      { text: z.string().describe('Text the notes to delete contain') },
+      async ({ text }) => ({ content: [{ type: 'text', text: memory.forget(text) }] }),
+    );
+    const appended = [AGENT_PROMPT, this.transcripts && transcriptPrompt(this.transcripts), memory.prompt()].filter(Boolean).join('\n\n');
     const q = query({
       prompt: inbox,
       options: {
@@ -216,14 +234,13 @@ class Agent extends EventEmitter {
         effort: this.fixed ? undefined : TIERS[this.tier].effort,
         permissionMode: this.mode,
         resume: this.resumeId ?? undefined,
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: this.transcripts ? `${AGENT_PROMPT}\n\n${transcriptPrompt(this.transcripts)}` : AGENT_PROMPT },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: appended },
         additionalDirectories: this.transcripts ? [this.transcripts] : undefined,
         includePartialMessages: true,
         // She asks her questions in chat instead of through a dialog.
         disallowedTools: ['AskUserQuestion'],
-        mcpServers: { capri: createSdkMcpServer({ name: 'capri', tools: [escalate] }) },
-        // The hand-off never needs your OK.
-        canUseTool: (name, input, opts) => (name === ESCALATE ? Promise.resolve({ behavior: 'allow', updatedInput: input }) : this.ask(name, input, opts)),
+        mcpServers: { capri: createSdkMcpServer({ name: 'capri', tools: [escalate, remember, forget] }) },
+        canUseTool: (name, input, opts) => (OWN_TOOLS.test(name) ? Promise.resolve({ behavior: 'allow', updatedInput: input }) : this.ask(name, input, opts)),
         env: claudeEnv(),
         stderr: process.env.CAPRI_DEBUG ? (d) => console.warn('[agent]', d.trimEnd()) : undefined,
       },
