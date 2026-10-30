@@ -98,6 +98,7 @@
     toldBlind: false, // said once that macOS won't let her see the screen
     voiceTurn: false, // you said the current request out loud, so she answers out loud
     lastReply: '', // her latest message, for reading back
+    nudged: '', // the day she last offered the standup
     following: false,
     spot: null, // { kind: 'ledge' | 'hang', until, … } while she sits on a window or hangs off the top
     flipped: false, // drawn upside down (hanging) // following you to another desktop
@@ -716,7 +717,18 @@
     chat.open();
     if (first) chat.addCapri(pick(QUIPS.hello));
     if (!state.replying) rig.setMood('curious', 3000);
+    nudgeStandup();
     syncOverlays();
+  }
+
+  // The first time you open her on a weekday morning, she offers the
+  // standup. Just a line: nothing runs until you ask.
+  function nudgeStandup() {
+    const now = new Date();
+    const day = now.toDateString();
+    if (state.nudged === day || now.getDay() % 6 === 0 || now.getHours() < 8 || now.getHours() >= 12) return;
+    state.nudged = day;
+    chat.addSys('morning. /standup drafts your update from yesterday.');
   }
 
   // Closing the chat also hands the keyboard back to the app you summoned
@@ -796,12 +808,13 @@
     '/cd <folder> where i work · /mode default|acceptEdits|plan|auto · /model auto|<name>',
     '/hooks on|off hear from your other claude code sessions · /quiet toggle my commentary',
     '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|off talk out loud · /ptt on|off push-to-talk',
+    '/recap [topic] the last call · /standup your update · /memory what i know about you · /cost today\'s spend · /cap <$>|off',
     `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'cost', 'cap', 'memory'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'cost', 'cap', 'memory', 'recap', 'standup'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
@@ -828,6 +841,10 @@
       if (result.error) {
         chat.addSys(result.error);
         rig.setMood('annoyed', 2000);
+      } else if (result.send) {
+        // A routine (/recap, /standup): main built the prompt, she runs it.
+        startWork();
+        bridge.chat(result.send, {});
       } else {
         chat.addSys(result.text);
       }

@@ -18,6 +18,7 @@ const { frontmost } = require('./frontmost');
 const { setupHearing } = require('./hearing');
 const costs = require('./costs');
 const memory = require('./memory');
+const routines = require('./routines');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -516,6 +517,11 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       const lines = memory.notes();
       return { text: lines.length ? `what i remember about you:\n${lines.join('\n')}` : "i don't have notes about you yet." };
     }
+    // Routines: a prompt built here, sent like a message.
+    case 'recap':
+      return { send: routines.recap(hearing.transcriptDir, arg) };
+    case 'standup':
+      return { send: routines.standup(hearing.transcriptDir, arg) };
     default:
       return { error: `unknown command /${name}` };
   }

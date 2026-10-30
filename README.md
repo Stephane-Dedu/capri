@@ -22,6 +22,7 @@ Capri is a side project, built for fun, but she isn't a toy: she's a full Claude
 - **See what you're looking at.** Each summon, she takes one look at your screen: a quick remark in the chat, and what she saw goes along with your first message, so "what's this error?" needs no copy-paste. → [A look at your screen](#a-look-at-your-screen)
 - **Follow you around.** Switch to another Space or virtual desktop and she glitches out of the old one and tears back in on yours.
 - **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you.
+- **Know you.** She keeps short notes about you (name, habits, projects, running jokes) and reads them at the start of every conversation. `/recap` turns the last call into decisions and action items, `/standup` drafts your update. → [Routines](#routines)
 - **Look good doing it.** A traced cut-paper puppet animated on twos, with 14 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
@@ -64,6 +65,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/hooks on\|off` | Install or remove the Claude Code hooks |
 | `/quiet` | Toggle her commentary on what you do |
 | `/wake`, `/listen`, `/talk`, `/ptt` `on\|off` | The "Capri" wake word, the always-on transcript, talking out loud, push-to-talk (same as the tray) |
+| `/recap [topic]`, `/standup` | Recap the last call, draft your standup (local files only) |
 | `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
@@ -100,6 +102,9 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 
 ### Routines
 
+- **`/recap [topic]`**: the last call from the transcript, as one line on what it was about, then decisions, action items (who → what, with dates) and open questions, with times.
+- **`/standup`**: a draft of your update since the last working day, from `git log` in the folders you had Claude Code sessions in, plus the transcript for meetings. The first time you open her on a weekday morning, she offers it in one line; nothing runs until you ask.
+- Both read local files only: no `git fetch`, no `gh`, no network, and they never create tickets, issues or messages anywhere.
 - **Her notes about you**: she saves short facts with her own `remember` / `forget` tools (no permission card) when she learns something that'll still matter next week, and reads them at the start of every conversation. `/memory` shows them, **Open her notes about me** in the tray opens the file to edit, and "forget that…" works in chat.
 - **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
 
@@ -241,6 +246,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: the OS speech synthesizer, French or English
+  routines.js    The /recap and /standup prompts
   memory.js      Her notes about you, and her remember / forget tools
   costs.js       Today's spend per model, and the daily cap
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
