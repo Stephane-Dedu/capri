@@ -20,6 +20,8 @@ const { CI } = require('./ci');
 const costs = require('./costs');
 const memory = require('./memory');
 const routines = require('./routines');
+const mac = require('./mac');
+const rewrite = require('./rewrite');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -76,6 +78,7 @@ function start() {
   ci.on('notice', (notice) => send('notice', notice));
   ci.on('warn', (message) => console.warn(`[capri] ci: ${message}`));
   if (cfg.ci) ci.start();
+  mac.on('warn', (text) => send('notice', { kind: 'attention', text, mood: 'annoyed' }));
   // You're busy at the keyboard, so she stays awake.
   let lastPing = 0;
   companion.on('activity', () => {
@@ -206,11 +209,25 @@ function summon() {
 // as your message once she's there. `woke`: you just said her name.
 async function summonWith({ heard = null, woke = false }) {
   if (!win) return;
-  const watching = config.get().look;
-  const [selection, image] = await Promise.all([
-    nvim.selection().catch(() => null),
+  const cfg = config.get();
+  const watching = cfg.look;
+  // Read before she takes the keyboard: the clipboard first (reading a
+  // selection may copy, then put the clipboard back), then what's selected,
+  // in Neovim or else in the front app.
+  const mine = win.isFocused();
+  const [clip, image, nvimSelection] = await Promise.all([
+    cfg.clipboard && !mine ? mac.clipboard() : null,
     watching ? look.capture(screen.getCursorScreenPoint()).catch(() => null) : null,
+    nvim.selection().catch(() => null),
   ]);
+  const appSelection = !nvimSelection && cfg.anySelection && !mine ? await mac.selection() : null;
+  // "Make this nicer", "in English": the selection is rewritten where it is.
+  if (heard && appSelection && rewrite.wants(heard)) {
+    rewriteInPlace(appSelection, heard);
+    return;
+  }
+  const selection = nvimSelection ?? (appSelection ? appChip(appSelection) : null);
+  const copied = clip && !clip.concealed && clip.age < 120 && clip.text.trim() && clip.text !== appSelection?.text ? clipChip(clip.text) : null;
   if (!win) return;
   shot = image ? { image, at: Date.now() } : null;
   if (!visible) setVisible(true);
@@ -219,7 +236,28 @@ async function summonWith({ heard = null, woke = false }) {
   const cursor = screen.getCursorScreenPoint();
   const bounds = win.getBounds();
   const sight = image ? 'ready' : watching && process.platform === 'darwin' && look.access() !== 'granted' ? 'blocked' : null;
-  send('summon', { x: cursor.x - bounds.x, y: cursor.y - bounds.y, selection, look: sight, heard, woke });
+  send('summon', { x: cursor.x - bounds.x, y: cursor.y - bounds.y, selection, clip: copied, look: sight, heard, woke });
+}
+
+// A selection from another app, shaped like a Neovim one for the chip.
+function appChip({ app: name, text }) {
+  const lines = text.split('\n').length;
+  return { app: name, text, file: '', from: 1, to: lines, label: name || 'selection' };
+}
+
+function clipChip(text) {
+  return { text: text.slice(0, 20000), label: text.trim().split('\n')[0].slice(0, 40) };
+}
+
+async function rewriteInPlace(selection, instruction) {
+  if (costs.over) {
+    send('agent:error', { kind: 'cap', message: `$${costs.cap}` });
+    return;
+  }
+  send('rewrite', { phase: 'start', app: selection.app });
+  const text = await rewrite.rewrite(selection.text, instruction);
+  const done = text ? await mac.replace(text) : null;
+  send('rewrite', { phase: done?.ok ? 'done' : 'failed', app: selection.app });
 }
 
 // Hiding keeps her (and her conversation) alive but off screen, e.g. while gaming.
@@ -285,6 +323,16 @@ function setLook(on) {
 function setHide(on) {
   config.set({ hide: on });
   win?.setContentProtection(on);
+  refreshMenu();
+}
+
+function setToggle(key, on) {
+  config.set({ [key]: on });
+  if (key === 'notify') mac.notifications(on);
+  if (key === 'autopilot') {
+    if (on) meetings.start();
+    else meetings.stop();
+  }
   refreshMenu();
 }
 
@@ -371,6 +419,13 @@ function buildMenu() {
     { type: 'separator' },
     { label: 'Watch CI on my own repos', type: 'checkbox', checked: cfg.ci, click: (item) => setCI(item.checked) },
     { label: 'Open her notes about me', click: () => shell.openPath(memory.file()) },
+    ...(mac.supported
+      ? [
+          { type: 'separator' },
+          { label: 'Bring my selection from any app', type: 'checkbox', checked: cfg.anySelection, click: (item) => setToggle('anySelection', item.checked) },
+          { label: 'Offer what I just copied', type: 'checkbox', checked: cfg.clipboard, click: (item) => setToggle('clipboard', item.checked) },
+        ]
+      : []),
     { label: 'Warp somewhere', click: () => send('warp') },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
@@ -432,11 +487,16 @@ ipcMain.handle('capri:status', () => info());
 
 // Context from the summon rides in front of the message: what she saw on the
 // screen first, then the Neovim selection right above your words.
-ipcMain.on('capri:chat', (_event, text, { selection, screen: seen, voice } = {}) => {
+// A selection from another app, or what you just copied, in front of your words.
+const quoted = (intro, text, message) => `${intro}:\n"""\n${String(text).slice(0, 20000)}\n"""\n\n${message}`;
+
+ipcMain.on('capri:chat', (_event, text, { selection, clip, screen: seen, voice } = {}) => {
   let message = String(text).slice(0, 50000);
   // Said out loud: her answer is read back (see "Talking out loud" in persona.js).
   if (voice) message = `(spoken) ${message}`;
-  if (selection) message = nvim.prompt(selection, message);
+  if (clip?.text) message = quoted("I've just copied this", clip.text, message);
+  if (selection?.app) message = quoted(`I've selected this in ${selection.app}`, selection.text, message);
+  else if (selection) message = nvim.prompt(selection, message);
   if (seen?.summary) message = look.prompt(seen, message);
   // The daily cap: nothing new gets sent once it's reached.
   if (costs.over) {
@@ -576,6 +636,7 @@ app.on('will-quit', () => {
   spaces?.stop();
   hearing?.stop();
   ci?.stop();
+  mac.stop();
   companion?.stop();
   agent?.reset();
 });

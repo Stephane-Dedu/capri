@@ -270,12 +270,13 @@ window.Capri = window.Capri || {};
       else delete this.context[key];
       const chip = (name, label, size, title) =>
         `<span class="chip" data-key="${name}" title="${esc(title)}"><span class="what">${esc(label)}</span><span class="size">${esc(size)}</span><button type="button" title="Don't send it">✕</button></span>`;
-      const { selection, screen } = this.context;
+      const { selection, clip, screen } = this.context;
       const chips = [];
       if (selection) {
         const lines = selection.to - selection.from + 1;
-        chips.push(chip('selection', `⧉ ${selection.label}`, `${lines} line${lines === 1 ? '' : 's'}`, selection.file || ''));
+        chips.push(chip('selection', `⧉ ${selection.label}`, `${lines} line${lines === 1 ? '' : 's'}`, selection.file || selection.text?.slice(0, 300) || ''));
       }
+      if (clip) chips.push(chip('clip', '⎘ copied', clip.label, clip.text.slice(0, 300)));
       if (screen) chips.push(chip('screen', '◉ screen', 'what i saw', screen.summary));
       this.attachEl.innerHTML = chips.join('');
       this.attachEl.hidden = !chips.length;

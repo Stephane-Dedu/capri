@@ -23,6 +23,7 @@ Capri is a side project, built for fun, but she isn't a toy: she's a full Claude
 - **Follow you around.** Switch to another Space or virtual desktop and she glitches out of the old one and tears back in on yours.
 - **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you, and goes and knocks on your window about it. She can also watch CI on your own repos' pull requests. → [Routines](#routines)
 - **Know you.** She keeps short notes about you (name, habits, projects, running jokes) and reads them at the start of every conversation. `/recap` turns the last call into decisions and action items, `/standup` drafts your update. → [Routines](#routines)
+- **Work with whatever you're in.** On summon she brings what you've selected in any app, and what you just copied. Select a Slack draft, hold right ⌥ and say "make this nicer" or "in English": she rewrites it in place. → [Any app](#any-app)
 - **Look good doing it.** A traced cut-paper puppet animated on twos, with 16 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
@@ -79,6 +80,16 @@ Any other `/command` goes to Claude Code, so your custom commands and skills wor
 Select some code (`v`, `V` or `Ctrl-V`) and summon her without leaving visual mode. The selection shows up as a chip above the input (`⧉ app.ts:12-30`) and goes in front of your next message with its file path and line numbers, the way Claude Code's IDE integration passes one along. Ask "what does this do?", "rename these", "make this async"; ✕ on the chip drops it. Summon her again with a new selection and she swaps it in.
 
 There's nothing to install on the Neovim side: every nvim listens on an RPC socket by default, so she asks each one whether it's in visual mode and, if one is, for the selected text. Her edits land in the file, and nvim reloads it when you switch back (that's `autoread`, on by default). A selection over 20,000 characters goes by file and line numbers only, and she reads it herself.
+
+### Any app
+
+On macOS, a summon also brings what you're working with elsewhere, through Accessibility:
+
+- **Your selection in any app** (Safari, Mail, Slack, VS Code, Notion…) comes along as a `⧉` chip, like a Neovim selection. Native apps hand it over directly; for Electron apps and Chrome she presses ⌘C for you once you've let go of the shortcut, reads it, and puts your clipboard back exactly as it was.
+- **What you just copied** (in the last 2 minutes) comes as a `⎘ copied` chip. Anything a password manager copies is marked as concealed, and she never reads those.
+- **Rewriting in place**: select some text, hold right ⌥ (or say "Capri, …") and ask for a change: "make this nicer", "fix the grammar", "in English", "corrige les fautes", "rends ça plus poli". One Haiku call rewrites it and the result replaces your selection where it is; ⌘Z in that app takes it back. Anything else you say about a selection ("what does this mean?") goes to her as a question, with the selection attached.
+
+Both chips can be turned off in the tray (**Bring my selection from any app**, **Offer what I just copied**). They only read anything at the moment you summon her.
 
 ### A look at your screen
 
@@ -191,6 +202,7 @@ When you share your screen, she isn't in it: **Hide me from screen shares** (on 
 - **The window you're in**: to sit on it, she reads the frame of the front window (position and size only, never its title or contents), now and then between jobs and every 0.7 s while she's sitting on it. It stays on your machine.
 - **Your microphone and the computer's audio**: only while the transcript, the wake word or push-to-talk needs them. Speech-to-text is whisper.cpp on 127.0.0.1, so audio never leaves your machine. Text reaches Claude only as the message you said to her, or when she reads the transcript to answer you. Her own voice is muted out of the log.
 - **GitHub**, with CI watching on: the open PRs you authored in repos owned by your own account (or `CAPRI_CI_OWNERS`), and a failed job's log when one goes red. Nothing else, and never another org's repos.
+- **Your selection and clipboard**: read only when you summon her (or rewrite by voice), never in the background. Password-manager copies are skipped. What's read goes to Claude only as part of the message you send.
 
 ## Controls
 
@@ -260,6 +272,8 @@ src/
   routines.js    The /recap and /standup prompts
   memory.js      Her notes about you, and her remember / forget tools
   costs.js       Today's spend per model, and the daily cap
+  mac.js         Talks to the macOS helper: selection, rewriting in place, clipboard, notifications, calendar
+  rewrite.js     Rewrites a selection as you asked, in one Haiku call
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
   config.js      Saved settings
   preload.js     The narrow bridge the page is allowed to use
@@ -281,6 +295,7 @@ src/
 tools/
   capri-hook.js  The hook command Claude Code runs
   capri-ears.swift  Streams the Mac's system audio (ScreenCaptureKit), for the transcript
+  capri-mac.swift   Her hands on macOS: selection, replace, clipboard, notifications, calendar
   trace_art.py   Traces her body from a reference frame
   trace_portrait.py  Traces the face close-up
 docs/            The README's GIF and pose / mood sheets, rendered from the rig

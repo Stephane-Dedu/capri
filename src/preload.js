@@ -8,6 +8,7 @@ const INCOMING = [
   'ptt',
   'music',
   'beat',
+  'rewrite',
   'wander',
   'reset',
   'notice',

@@ -410,8 +410,9 @@
   // at the screenshot it took.
   // Out loud (push-to-talk, or "Capri, …"), what you said is sent once she's
   // there; a bare "Capri" gets a "yeah?" and she listens for the rest.
-  async function summon({ selection, look, heard, woke, ...cursor }) {
+  async function summon({ selection, clip, look, heard, woke, ...cursor }) {
     if (selection) chat.attach('selection', selection);
+    if (clip) chat.attach('clip', clip);
     if (chat.isOpen) {
       if (heard) send(heard, { voice: true });
       else if (selection || woke) openChat();
@@ -785,7 +786,7 @@
     }
     state.voiceTurn = voice;
     let context = chat.takeContext();
-    chat.addUser(text, [voice && '🎙', context.selection && `⧉ ${context.selection.label}`, context.screen && '◉ screen'].filter(Boolean));
+    chat.addUser(text, [voice && '🎙', context.selection && `⧉ ${context.selection.label}`, context.clip && '⎘ copied', context.screen && '◉ screen'].filter(Boolean));
     startWork();
     // Asked before she finished looking: what she saw still goes along, if
     // it comes in time.
@@ -1011,6 +1012,21 @@
       await warp(nearbySpot(60, 140), 'hop');
     }
   }
+
+  // Rewriting your selection in place ("make this nicer", "in English").
+  bridge.on('rewrite', ({ phase, app: name }) => {
+    if (phase === 'start') {
+      strikePose('hack', 15000);
+      say(`✎ rewriting your ${name || 'text'}…`, 15000);
+    } else if (phase === 'done') {
+      state.poseOverride = null;
+      pop(`done. ⌘Z in ${name || 'the app'} undoes it.`, 'smug', 3000);
+      speak(pick(QUIPS.rewritten), 'reply');
+    } else {
+      state.poseOverride = null;
+      pop("couldn't rewrite that one. try selecting it again?", 'annoyed', 3500);
+    }
+  });
 
   // Music on the computer's audio: she dances, bouncing on the beats.
   bridge.on('music', (on) => {
