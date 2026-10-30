@@ -318,6 +318,51 @@ Claude Code prefers an `ANTHROPIC_API_KEY` over your login, so a stale one break
 
 The project folder, model, toggles and last session per project are saved in Electron's user data folder (`config.json`).
 
+## Built with
+
+| Part | Technology | What it does for her |
+|---|---|---|
+| App | [Electron](https://www.electronjs.org/) 45 (Node in the main process, Chromium for the page) | One transparent, click-through overlay window, the tray, the global shortcut |
+| Brain | [Claude Agent SDK](https://docs.claude.com/en/docs/agent-sdk/overview), i.e. Claude Code as a library | The full Claude Code agent: tools, permissions, `CLAUDE.md`, MCP servers, skills, subagents |
+| Models | Claude Haiku 5.5 and Claude Opus 5.5 | Haiku for chat, one-liners, screen looks and CI diagnoses; Opus for real jobs, with a hand-off between them |
+| Her own tools | In-process MCP server, [zod](https://zod.dev) schemas | `escalate`, `remember` / `forget`, the `league_*` tools |
+| Body | SVG and Canvas 2D, a `requestAnimationFrame` loop, CSS keyframes | The cut-paper puppet on twos, the glitch tear, shards and streaks |
+| Ears | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) server with the Silero VAD, Web Audio worklets | Local speech-to-text (French and English), the wake word, push-to-talk, the transcript |
+| Voice | [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) through [kokoro-js](https://www.npmjs.com/package/kokoro-js) (ONNX Runtime); [Chatterbox](https://github.com/resemble-ai/chatterbox) (PyTorch, on Apple's GPU or CUDA) in a local Python server; ElevenLabs; the OS voice | Her voice: a blend you design, a clone (with consent), a hosted voice or the system one; a bitcrusher and biquad filters make it hers |
+| macOS | Swift helpers: ScreenCaptureKit, Accessibility (AX), AppKit, EventKit | The computer's audio, your selection and clipboard, notification banners, your calendar |
+| Desktop glue | [uiohook-napi](https://github.com/SnosMe/uiohook-napi), [koffi](https://koffi.dev) (FFI) | The push-to-talk key from any app; the front window's frame and Spaces / virtual desktops |
+| Neovim | msgpack-RPC over each nvim's socket | Your visual selection, with its file and lines |
+| League | The League client's local API (LCU); [Oracle's Elixir](https://oracleselixir.com) pro games; Riot's API (league-v4, match-v5, account-v1) and Data Dragon | Champ select, hovering, banning and locking; pro and high-elo solo queue games; your squad's own games |
+| Draft math | Plain JavaScript, stats built in a `worker_threads` thread | Log-odds win chances with shrinkage toward the average, matchups by role, player levels, the team check |
+| Discord | [discord.js](https://discord.js.org), [@discordjs/voice](https://www.npmjs.com/package/@discordjs/voice), Opus ([opusscript](https://www.npmjs.com/package/opusscript)), DAVE encryption ([@snazzah/davey](https://www.npmjs.com/package/@snazzah/davey)) | Her bot in your voice channel |
+| Claude Code hooks | A tiny Node hook script posting to `127.0.0.1` | Your other Claude Code sessions telling her when they finish or need you |
+| CI | The `gh` CLI with your own login | Watching your own repos' pull requests |
+
+What runs where:
+
+```mermaid
+flowchart LR
+    subgraph mac["Your machine"]
+      page["Page: her body, chat, mic, voice playback"]
+      main["Main process: agent, hearing, League, Discord bot"]
+      whisper["whisper-server (speech to text)"]
+      tts["capri-tts.py (cloned voice)"]
+      lcu["League client (local API)"]
+      helpers["Swift helpers (audio, selection, calendar)"]
+      page <--> main
+      main --> whisper
+      main --> tts
+      main --> lcu
+      main --> helpers
+    end
+    main --> claude["Claude (Anthropic API, through Claude Code)"]
+    main --> riot["Riot API, Data Dragon, Oracle's Elixir"]
+    main --> eleven["ElevenLabs (optional)"]
+    main --> discord["Discord voice channel (optional)"]
+```
+
+Speech-to-text, the local voices, the League client and the draft math never leave your machine; what goes out is listed in [What she watches, and what it costs](#what-she-watches-and-what-it-costs).
+
 ## How it works
 
 ```
