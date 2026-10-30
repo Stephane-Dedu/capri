@@ -818,12 +818,13 @@
     '/hooks on|off hear from your other claude code sessions · /quiet toggle my commentary',
     '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|off talk out loud · /ptt on|off push-to-talk',
     '/recap [topic] the last call · /standup your update · /memory what i know about you · /cost today\'s spend · /cap <$>|off',
+    '/ci on|off watch CI on your own repos · /dance on|off dance when music plays · /hide on|off out of screen shares',
     `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];

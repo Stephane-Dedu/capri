@@ -17,6 +17,7 @@ const DEFAULTS = {
   ptt: true, // hold a key to talk to her
   talk: true, // she answers out loud when you talked to her
   dance: false, // dance when music plays (follows the computer's audio)
+  hide: true, // left out of screen shares, recordings and screenshots (you still see her)
   ci: false, // watch CI on your own repos' open PRs
   dailyCap: 0, // stop spending past this many dollars a day (0: no cap)
   sessions: {}, // project folder -> her last session there, for /resume

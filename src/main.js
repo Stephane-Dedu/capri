@@ -87,6 +87,8 @@ function start() {
   companion.watch(cfg.cwd);
 
   createWindow();
+  // You see her; screen shares, recordings and screenshots don't.
+  win.setContentProtection(cfg.hide);
   // You switched desktops: she follows you over, if she's out and allowed to.
   spaces = workspaces.watch(win, () => {
     if (visible && config.get().follow) send('workspace', { here: spaces.here() });
@@ -277,6 +279,15 @@ function setLook(on) {
   refreshMenu();
 }
 
+// Out of screen shares and recordings: macOS leaves her window out of every
+// capture (sharing type "none"), Windows 10 2004+ too (exclude-from-capture).
+// What's behind her shows through, so viewers see nothing missing.
+function setHide(on) {
+  config.set({ hide: on });
+  win?.setContentProtection(on);
+  refreshMenu();
+}
+
 function setCI(on) {
   config.set({ ci: on });
   if (on) ci.start();
@@ -352,6 +363,7 @@ function buildMenu() {
     { label: 'Comment on what I do', type: 'checkbox', checked: cfg.reactions, click: (item) => setReactions(item.checked) },
     { label: 'Wander around', type: 'checkbox', checked: cfg.wander, click: (item) => setWander(item.checked) },
     { label: 'Follow me across desktops', type: 'checkbox', checked: cfg.follow, click: (item) => setFollow(item.checked) },
+    { label: 'Hide me from screen shares', type: 'checkbox', checked: cfg.hide, click: (item) => setHide(item.checked) },
     { label: 'Look at my screen when summoned', type: 'checkbox', checked: cfg.look, click: (item) => setLook(item.checked) },
     { type: 'separator' },
     ...(hearing?.menu() ?? []),
@@ -515,6 +527,11 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (arg === 'on' || arg === 'off') hearing.set[name](arg === 'on');
       else if (arg) return { error: `/${name} on|off` };
       return { text: `${hearing.labels[name]}: ${config.get()[name] ? 'ON' : 'off'}` };
+    }
+    case 'hide': {
+      if (arg === 'on' || arg === 'off') setHide(arg === 'on');
+      else if (arg) return { error: '/hide on|off' };
+      return { text: config.get().hide ? "hidden from screen shares, recordings and screenshots. you still see me." : 'visible in screen shares and screenshots.' };
     }
     case 'dance': {
       if (arg === 'on' || arg === 'off') hearing.set.dance(arg === 'on');

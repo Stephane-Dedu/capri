@@ -67,6 +67,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/wake`, `/listen`, `/talk`, `/ptt` `on\|off` | The "Capri" wake word, the always-on transcript, talking out loud, push-to-talk (same as the tray) |
 | `/recap [topic]`, `/standup` | Recap the last call, draft your standup (local files only) |
 | `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
+| `/ci on\|off`, `/dance on\|off`, `/hide on\|off` | Watch CI on your own repos, dance when music plays, stay out of screen shares |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
 | `/warp`, `/help` | Teleport somewhere / show this list |
@@ -175,6 +176,8 @@ Her mouth follows the anime: she has no lips, just white teeth cut into a black 
 When she isn't busy she roams: short hops, stutter-step skitters, full-screen warps (mostly toward the edges, out of your way), glitch twitches and idle one-liners. Swipe at her fast and she might dodge. Turn roaming off from the tray, or untick **Visible** to hide her, for example while gaming.
 
 Switch to another Space (macOS) or virtual desktop (Windows) and she follows you, tearing out and back in somewhere on the new one. On macOS her window is on every Space while she follows (moving it after each switch raced the switch and could send you back to the old Space); on Windows it's moved to your desktop after you switch. Untick **Follow me across desktops** in the tray to leave her where she is; the summon shortcut still brings her over. On macOS she follows you into full-screen apps too (a full-screen terminal, say), which macOS only allows for apps without a Dock icon, so she lives in the menu bar. On Windows she uses the virtual desktop API through [koffi](https://koffi.dev), an optional dependency; on an empty desktop she waits until you open a window there.
+
+When you share your screen, she isn't in it: **Hide me from screen shares** (on by default, `/hide off` to turn it off) leaves her window out of every screen capture, so you see her and the people on the call see what's behind her, with no black box. The same goes for recordings and screenshots, so turn it off to screenshot her. macOS does this for any capture (Meet, Zoom, Teams, `⌘⇧4`); Windows 10 (2004) and later too. Her own screen look on summon doesn't see her either.
 
 ## What she watches, and what it costs
 
