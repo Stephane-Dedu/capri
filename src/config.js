@@ -25,6 +25,7 @@ const DEFAULTS = {
   autopilot: false, // transcript on during calendar meetings, then offer /recap (macOS)
   ci: false, // watch CI on your own repos' open PRs
   league: false, // League of Legends draft help in champ select
+  discord: false, // say League call-outs in your Discord voice channel (discord.js)
   voice: null, // her voice: { engine: kokoro | elevenlabs | system, blend, speed } (voice.js)
   dailyCap: 0, // stop spending past this many dollars a day (0: no cap)
   sessions: {}, // project folder -> her last session there, for /resume

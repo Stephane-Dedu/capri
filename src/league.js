@@ -193,6 +193,7 @@ class League extends EventEmitter {
     this.mastery = null;
     this.history = null; // { at, byKey: Map key -> { n, w } }: your recent games
     this.party = null; // puuid / summoner id -> in-game name, for your premades
+    this.called = new Set(); // call-outs already made this draft
   }
 
   // ---- watching ---------------------------------------------------------------
@@ -278,6 +279,7 @@ class League extends EventEmitter {
     const session = await this.lcu.get('/lol-champ-select/v1/session');
     if (!session || session.isSpectating) return DRAFT_EVERY;
     const live = await this.read(session);
+    await this.callouts(live).catch(() => {});
     if (this.brb) return this.drive(live);
     const turn = live.turn;
     if (turn && !this.seen.has(turn.id)) {
@@ -345,6 +347,80 @@ class League extends EventEmitter {
         }
       }),
     );
+  }
+
+  // ---- call-outs (Discord) ---------------------------------------------------
+
+  // A spoken line on each squad player's pick turn (yours too), and a team
+  // check once your team has locked in, each said once. Only when something
+  // listens (main.js, for Discord).
+  async callouts(live) {
+    if (!this.listenerCount('callout')) return;
+    for (const turn of live.teamTurns) {
+      if (turn.type !== 'pick' || this.called.has(turn.id)) continue;
+      this.called.add(turn.id);
+      const mine = turn.actorCellId === live.cell;
+      const friend = live.friends.find((f) => f.cellId === turn.actorCellId);
+      if (!mine && !friend) continue; // someone who isn't on your squad
+      const text = await this.calloutFor(live, mine ? null : friend);
+      if (text) this.emit('callout', { text, mine });
+    }
+    const everyone = live.allies.length === live.teamSize - 1 && live.allies.every((a) => a.locked) && live.locked;
+    if (everyone && !this.called.has('team')) {
+      this.called.add('team');
+      const text = await this.teamCallout(live);
+      if (text) this.emit('callout', { text, mine: false });
+    }
+  }
+
+  // "Ashen: Varus, 55%. Draven's just as good." friend null: you.
+  async calloutFor(live, friend) {
+    const stats = await this.stats(false);
+    if (!stats) return null;
+    const member = friend ? friend.member : this.squad.me();
+    const role = friend ? (friend.role ?? FROM_WORDS[keyOf(member?.roles?.[0] ?? '')]) : live.role;
+    if (!role) return null;
+    const pd = this.playerData(member, stats, friend ? null : await this.historyByKey());
+    const favorites = this.poolOf(member, role, stats);
+    const owned = friend ? null : new Set([...(await this.available('pick'))].map((id) => this.champ(id).key));
+    const context = {
+      role,
+      allies: live.allies.filter((a) => a.cellId !== friend?.cellId).map(({ key, role: r }) => ({ key, role: r })),
+      enemies: live.enemies.map(({ key, role: r }) => ({ key, role: r })),
+      unavailable: new Set([...live.bans, ...live.enemies, ...live.allies.filter((a) => a.locked)].map((x) => x.key)),
+      allowed: owned?.size ? owned : null,
+      level: pd.level,
+      history: pd.history,
+      favorites,
+    };
+    const [best] = suggestPicks(stats, context, 1).picks;
+    if (!best) return null;
+    const [own] = favorites.size ? scorePool(stats, context, favorites, role) : [];
+    const name = friend ? spokenName(member) : 'your pick';
+    let line = `${name}: ${best.name}, ${pct(best.win)}.`;
+    if (best.lane?.n >= 30 && Math.abs(best.lane.wr - 0.5) >= 0.03) line += ` ${pct(best.lane.wr)} into ${best.lane.vs}.`;
+    if (own && own.key !== best.key && best.win - own.win <= 0.02) line += ` ${own.name} is just as good.`;
+    return line;
+  }
+
+  // "Team's locked. Low damage, about 89% of a usual team's. Watch Vi."
+  async teamCallout(live) {
+    const stats = await this.stats(false);
+    if (!stats || !live.locked) return null;
+    const me = this.squad.me();
+    const level = (member) => this.playerData(member, stats).level;
+    const comp = [
+      { key: live.locked.key, role: live.role, level: level(me) },
+      ...live.allies.map((a) => ({ key: a.key, role: a.role, level: level(live.friends.find((f) => f.cellId === a.cellId)?.member) })),
+    ].filter((m) => m.role);
+    const filled = withRoles(stats, { role: null, allies: [], enemies: live.enemies.map(({ key, role }) => ({ key, role })) });
+    const targeted = this.targeted(stats);
+    const threats = filled.enemies.filter((e) => targeted.has(e.key)).map((e) => stats.name(e.key));
+    const check = comp.length >= 3 ? teamCheck(stats, comp) : null;
+    const warning = check?.warnings?.[0];
+    // A verdict on damage only when there are stats to back it.
+    const verdict = warning ? ` ${warning[0].toUpperCase()}${warning.slice(1)}.` : check?.ratio !== undefined ? ' Damage looks fine.' : '';
+    return `Team's locked.${verdict}${threats.length ? ` Watch ${threats.slice(0, 2).join(' and ')}.` : ''}`;
   }
 
   // ---- brb ---------------------------------------------------------------
@@ -529,7 +605,8 @@ class League extends EventEmitter {
     const actions = (session.actions ?? []).flat();
     const mine = actions.filter((a) => a.actorCellId === cell);
     const locked = new Set(actions.filter((a) => a.type === 'pick' && a.completed).map((a) => a.actorCellId));
-    const player = (p, id) => ({ id, ...this.champ(id), role: FROM_LCU[p.assignedPosition] ?? null, locked: locked.has(p.cellId) });
+    const player = (p, id) => ({ id, ...this.champ(id), cellId: p.cellId, role: FROM_LCU[p.assignedPosition] ?? null, locked: locked.has(p.cellId) });
+    const myCells = new Set((session.myTeam ?? []).map((p) => p.cellId));
     const pickAction = mine.find((a) => a.type === 'pick' && !a.completed) ?? null;
     const bans = new Set([...(session.bans?.myTeamBans ?? []), ...(session.bans?.theirTeamBans ?? []), ...actions.filter((a) => a.type === 'ban' && a.completed).map((a) => a.championId)]);
     bans.delete(0);
@@ -546,11 +623,15 @@ class League extends EventEmitter {
       intent: me?.championPickIntent || (pickAction?.championId ?? 0),
       locked: myLock ? this.champ(myLock.championId) : null,
       turn: mine.find((a) => a.isInProgress && !a.completed) ?? null,
+      // Every turn on your team in progress (yours and your teammates').
+      teamTurns: actions.filter((a) => a.isInProgress && !a.completed && myCells.has(a.actorCellId)),
+      cell,
+      teamSize: (session.myTeam ?? []).length,
       pickAction,
       allies: (session.myTeam ?? []).filter((p) => p.cellId !== cell && (p.championId || p.championPickIntent)).map((p) => player(p, p.championId || p.championPickIntent)),
       friends: (session.myTeam ?? [])
         .filter((p) => p.cellId !== cell)
-        .map((p) => ({ member: friend(p), role: FROM_LCU[p.assignedPosition] ?? null, id: p.championId || p.championPickIntent || 0, locked: locked.has(p.cellId) }))
+        .map((p) => ({ member: friend(p), cellId: p.cellId, role: FROM_LCU[p.assignedPosition] ?? null, id: p.championId || p.championPickIntent || 0, locked: locked.has(p.cellId) }))
         .filter((f) => f.member),
       enemies: (session.theirTeam ?? []).filter((p) => p.championId).map((p) => player(p, p.championId)),
       bans: [...bans].map((id) => ({ id, ...this.champ(id) })),
@@ -1014,6 +1095,8 @@ class League extends EventEmitter {
 }
 
 const sigmoidOf = (x) => 1 / (1 + Math.exp(-x));
+// How she says a squad player's name: their nickname if they have one.
+const spokenName = (member) => member?.aka?.[0] ?? member?.name ?? 'you';
 const adjustedPair = (r, avg) => (r.w + 300 * avg) / (r.g + 300);
 
 // The most telling reason for a pick, in a few words.

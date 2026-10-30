@@ -76,6 +76,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/notify on\|off`, `/autopilot on\|off` | Messages (Slack…) announced, meeting autopilot (macOS) |
 | `/league on\|off\|update`, `/league key RGAPI-…` | League champ select help, refresh the pro data now, your Riot API key for high-elo solo queue games |
 | `/brb`, `/back` | Draft for you while you're away, and stop |
+| `/discord on\|off`, `/discord say <text>` | Call picks out in your Discord voice channel; say a line there |
 | `/voice try <blend> [speed x] ["text"]`, `/voice set`, `/voice voices`, `/voice kokoro\|elevenlabs\|system` | Design her voice: hear a blend of Kokoro voices, keep it, list them, pick the engine |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
@@ -152,6 +153,16 @@ Out of game only: champ select, never anything once the game loads. Turn it on w
 - **High-elo solo queue** (with your Riot API key): she collects ranked solo games from the top of your server's ladder, Diamond and up by default (`CAPRI_SOLOQ_TIER`: `emerald`, `diamond`, `master`, `grandmaster` or `challenger`), and keeps a game only when at least 5 of the 10 players are at that level right now. There are far more Diamond+ games than a development key can fetch (about 100 requests every 2 minutes, roughly 2,500 games an hour), so the crawl runs in the background whenever she has a key: the ladder once a day (all of Diamond is about 200 pages), then random players' new games, appended to a file as they come. She keeps the newest 60,000 games of the last 21 days (`CAPRI_SOLOQ_MAX`, `CAPRI_SOLOQ_DAYS`), so after a day of running a common lane matchup has hundreds of games. Stats are rebuilt in the background every 20 minutes, without freezing her. Once there's solo queue data, a pro game counts half as much. Get a key at [developer.riotgames.com](https://developer.riotgames.com) and give it to her with `/league key RGAPI-…` (it's checked, then kept encrypted in the keychain, and never sent to a model) or as `RIOT_API_KEY` in `.env`. A development key expires after 24 hours; when it does she tells you, and `/league key` with a new one picks up where she stopped. A personal API key (register a project on the same site) doesn't expire. Your server comes from the League client, or `CAPRI_RIOT_PLATFORM` (`euw1` by default). The games are stored without player names or ids.
 - **How she reads the client**: through the League client's local API on 127.0.0.1, the same one Blitz, Porofessor and U.GG use (the port and password come from its lockfile). She reads your champ select, mastery, match history and party, and hovers, bans, locks and accepts through it. Locking a pick or ban from her chat goes through a permission card, because it's final.
 
+#### In your Discord voice channel
+
+She can join your squad's Discord call and say the picks there, in her voice.
+
+- **Call-outs**: on each squad player's pick turn (yours too) she says the strongest pick for them in a line, for their role and level ("Ashen: Varus, 55%. 53% into Ashe."), and their own pool pick when it's within 2 points. When your team has locked in, a team check: low damage, all AD, and the enemy's carry threats ("Team's locked. Low damage, about 89% of a usual team's. Watch Vi."). Random teammates in solo queue get nothing; your friends are recognised through your party.
+- **Your own bot**: create an application in the [Discord developer portal](https://discord.com/developers/applications), add a bot, copy its token, and invite it to your server with the *Connect* and *Speak* permissions. Put `DISCORD_BOT_TOKEN` and your own Discord user id (`DISCORD_USER_ID`: Settings › Advanced › Developer Mode, then right-click your name › Copy User ID) in `.env`, then `/discord on` or **League of Legends › Call picks out in Discord** in the tray.
+- She follows you: she joins the voice channel you're in, moves when you move, leaves when you leave. She joins **deafened** and never hears the channel; she only talks. Lines queue up, and one that waited more than 20 seconds is dropped.
+- **Her voice** is the one you set with `/voice` (see [Her voice](#her-voice)), through the same glitch as on the desktop.
+- Without Discord, your friends' call-outs show up on your desktop instead.
+
 ### Her voice
 
 Four engines, each falling back to the next, all through her bitcrusher glitch:
@@ -166,6 +177,7 @@ Four engines, each falling back to the next, all through her bitcrusher glitch:
 - **ElevenLabs**: a voice you designed there (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`; `/voice elevenlabs`). Recent lines are cached, so a repeated one isn't paid for twice.
 - **System**: the macOS voice (Samantha, or Amélie for French), as before.
 
+The same voice talks on your desktop and in [Discord](#in-your-discord-voice-channel).
 
 ### Agent routing
 
@@ -250,6 +262,7 @@ When you share your screen, she isn't in it: **Hide me from screen shares** (on 
 - **Her notes and the spend meter** live in the app's data folder (`memory.md`, `spend.json`), with your voice notes and reminders (`notes.md`, `reminders.json`).
 - **Your selection and clipboard**: read only when you summon her (or rewrite by voice), never in the background. Password-manager copies are skipped. What's read goes to Claude only as part of the message you send.
 - **League of Legends**, with champ select help or brb on: the League client's local API on 127.0.0.1, every 4 s while it's running (every second in champ select, 10 s while it isn't). Champions, bans, your role, mastery, recent games and party stay on your machine; only what she reads for a chat answer goes to Claude (champions, odds, your squad's names and notes), and never the names of anyone outside your squad. Pro data is one download from Oracle's Elixir's Google Drive every few days (retried hourly while Drive refuses). With a Riot API key, the high-elo ladder and those players' ranked games come from Riot's API, with champion names from its public Data Dragon; only your key goes out, nothing about you. Your squad, the games and the icons live in her `league` data folder.
+- **Her voice and Discord**: with ElevenLabs set up, the text of each line she says goes to ElevenLabs to be spoken (nothing else). With Discord call-outs on, her bot logs in with your token and joins your voice channel deafened: Discord only ever gets her voice, never the channel's audio.
 - **Notifications and your calendar**: with messages or the autopilot on, she reads notification banners and your Mac's calendar locally. None of it goes to a model: banners are shown and said out loud, and meeting titles only end up in the local transcript.
 
 ## Controls
@@ -289,6 +302,7 @@ Put any of these in `.env` (see `.env.example`):
 | `CAPRI_CI_EVERY` | `120` | Seconds between CI checks |
 | `CAPRI_NOTIFY_APPS` | `Slack,Messages,WhatsApp,Discord,Signal,Telegram` | Apps whose notifications she tells you about |
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | unset | Her voice from ElevenLabs, on the desktop and on Discord (`CAPRI_ELEVENLABS_MODEL`: `eleven_flash_v2_5`) |
+| `DISCORD_BOT_TOKEN`, `DISCORD_USER_ID` | unset | Your Discord bot's token and your own Discord user id, for `/discord on` |
 | `CAPRI_LEAGUE_DIR` | the default install | League of Legends install folder (the one with `lockfile`), if it isn't in the default place |
 | `RIOT_API_KEY` | unset | Riot API key for high-elo solo queue games (`/league key` overrides it) |
 | `CAPRI_RIOT_PLATFORM` | from the client, else `euw1` | Your League server for Riot's API (`na1`, `kr`, `eun1`…) |
@@ -323,6 +337,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: Kokoro (local, a blend you design), ElevenLabs, or the OS speech synthesizer
+  discord.js     Her bot in your Discord voice channel: follows you, says her lines through her glitch
   (tools/capri-tts.py: the Chatterbox server for a cloned voice)
   ci.js          Watches CI on your own repos' open PRs with gh
   routines.js    The /recap and /standup prompts

@@ -26,6 +26,7 @@ const rewrite = require('./rewrite');
 const { notes, when } = require('./notes');
 const { Meetings } = require('./meetings');
 const league = require('./league');
+const { Discord } = require('./discord');
 const voice = require('./voice');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
@@ -45,6 +46,7 @@ let hearing = null;
 let ci = null;
 let meetings = null;
 let autoListening = false; // the autopilot turned the transcript on for a meeting
+const discord = new Discord();
 const activeWindow = frontmost();
 let commands = [];
 let visible = !process.env.CAPRI_START_HIDDEN;
@@ -108,6 +110,15 @@ function start() {
   league.on('card', (card) => send('league', card));
   league.on('change', () => refreshMenu());
   if (cfg.league) league.enable(true);
+  // Her pick call-outs, in your Discord voice channel when she's there (discord.js).
+  league.on('callout', ({ text, mine }) => {
+    const said = discord.say(text);
+    // Your own turn already has its card; your friends' turns show here too.
+    if (!mine) send('notice', { kind: 'quip', project: 'champ select', text, mood: 'mischief', quiet: said });
+  });
+  discord.on('change', () => refreshMenu());
+  discord.on('warn', (message) => console.warn(`[capri] discord: ${message}`));
+  if (cfg.discord) discord.start();
   // You're busy at the keyboard, so she stays awake.
   let lastPing = 0;
   companion.on('activity', () => {
@@ -421,6 +432,13 @@ function setCI(on) {
   refreshMenu();
 }
 
+function setDiscord(on) {
+  config.set({ discord: on });
+  if (on) discord.start();
+  else discord.stop();
+  refreshMenu();
+}
+
 function setLeague(on) {
   config.set({ league: on });
   league.enable(on);
@@ -570,6 +588,8 @@ function buildMenu() {
         { label: 'Open my squad', click: () => openLeagueFile(league.squad.file, '{\n  "players": []\n}\n') },
         { label: 'Open the pro data folder', click: () => shell.openPath(league.dir) },
         { label: 'Update pro data now', click: () => league.data.refresh({ force: true }) },
+        { type: 'separator' },
+        { label: `Call picks out in Discord (${discord.status})`, type: 'checkbox', checked: cfg.discord, click: (item) => setDiscord(item.checked) },
       ],
     },
     ...(mac.supported
@@ -843,6 +863,15 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (arg === 'off') league.setBrb(false, "ok, you're back. all yours.");
       else league.setBrb(true, BRB_ON);
       return { text: league.brb ? 'brb: ON' : 'brb: off' };
+    case 'discord': {
+      const [sub, ...rest] = arg.split(/\s+/);
+      if (sub === 'on' || sub === 'off') setDiscord(sub === 'on');
+      else if (sub === 'say') {
+        if (!rest.length) return { error: '/discord say <text>' };
+        return discord.say(rest.join(' ')) ? { text: 'said it in Discord.' } : { error: `not in a voice channel (${discord.status}).` };
+      } else if (sub) return { error: '/discord on|off|say <text>' };
+      return { text: `discord call-outs: ${config.get().discord ? 'ON' : 'off'} · ${discord.status}` };
+    }
     case 'voice': {
       const [sub = '', ...rest] = arg.split(/\s+/);
       if (!sub) return { text: voiceStatus() };
@@ -904,6 +933,7 @@ app.on('will-quit', () => {
   ci?.stop();
   meetings?.stop();
   league.shutdown();
+  discord.stop();
   voice.stopChatterbox();
   notes.stop();
   mac.stop();
