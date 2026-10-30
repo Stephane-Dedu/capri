@@ -825,7 +825,7 @@
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
@@ -989,6 +989,10 @@
       say(n.project && n.kind !== 'quip' ? `[${n.project}] ${n.text}` : n.text, n.kind === 'quip' ? 4500 : 7000);
     }
     if (!n.quiet) speak(n.text, 'aside');
+    if (n.kind === 'meeting') {
+      touch();
+      cutIn(n.mood ?? 'curious');
+    }
     if (n.kind === 'done') celebrate();
     else if (n.kind === 'attention') {
       touch();
@@ -1012,6 +1016,35 @@
       await warp(nearbySpot(60, 140), 'hop');
     }
   }
+
+  // A note or a reminder you said out loud: done on the spot, she confirms.
+  bridge.on('said', ({ kind, text, when }) => {
+    touch();
+    const line = kind === 'note' ? `noted: ${text}` : `⏰ ${when}: ${text}`;
+    if (chat.isOpen) chat.addSys(line);
+    else pop(line, 'smug', 3500);
+    speak(kind === 'note' ? pick(QUIPS.noted) : `okay, ${when}.`, 'reply');
+  });
+
+  // A reminder is due: she comes and knocks on your window about it.
+  bridge.on('reminder', ({ text }) => {
+    touch();
+    if (chat.isOpen) chat.addNotice({ kind: 'attention', project: 'reminder', text });
+    else {
+      act(knockOnWindow);
+      setTimeout(() => pop(`⏰ ${text}`, 'curious', 9000), 900);
+    }
+    speak(`reminder: ${text}`, 'quiet-in-calls');
+  });
+
+  // A message (Slack…) arrived: who it's from, out loud; the text stays on
+  // your screen.
+  bridge.on('message', ({ app: name, title, subtitle, body }) => {
+    const from = [title, subtitle].filter(Boolean).join(' · ');
+    if (chat.isOpen) chat.addNotice({ kind: 'quip', project: name, text: `${from}: ${body}` });
+    else pop(`${name} · ${from}${body ? `: ${body.slice(0, 90)}${body.length > 90 ? '…' : ''}` : ''}`, 'curious', 6000);
+    speak(`${name} message from ${title || 'someone'}.`, 'quiet-in-calls');
+  });
 
   // Rewriting your selection in place ("make this nicer", "in English").
   bridge.on('rewrite', ({ phase, app: name }) => {

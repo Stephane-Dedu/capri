@@ -22,6 +22,8 @@ const memory = require('./memory');
 const routines = require('./routines');
 const mac = require('./mac');
 const rewrite = require('./rewrite');
+const { notes, when } = require('./notes');
+const { Meetings } = require('./meetings');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -38,6 +40,8 @@ let spaces = null;
 let shot = null; // the screenshot from the last summon, until she looks at it
 let hearing = null;
 let ci = null;
+let meetings = null;
+let autoListening = false; // the autopilot turned the transcript on for a meeting
 const activeWindow = frontmost();
 let commands = [];
 let visible = !process.env.CAPRI_START_HIDDEN;
@@ -78,7 +82,20 @@ function start() {
   ci.on('notice', (notice) => send('notice', notice));
   ci.on('warn', (message) => console.warn(`[capri] ci: ${message}`));
   if (cfg.ci) ci.start();
+  // Reminders you set by voice or /remind (notes.js).
+  notes.on('due', (reminder) => send('reminder', reminder));
+  notes.start();
+  // Messages (Slack…) from notification banners: shown and said here, never sent to a model.
+  mac.on('notification', onNotification);
   mac.on('warn', (text) => send('notice', { kind: 'attention', text, mood: 'annoyed' }));
+  if (cfg.notify) mac.notifications(true);
+  // The meeting autopilot (meetings.js), off until you turn it on.
+  meetings = new Meetings({ mac });
+  meetings.on('soon', ({ title }) => send('notice', { kind: 'meeting', text: `${title} starts in a minute.`, mood: 'curious' }));
+  meetings.on('start', onMeetingStart);
+  meetings.on('end', onMeetingEnd);
+  meetings.on('warn', (text) => send('notice', { kind: 'attention', text, mood: 'annoyed' }));
+  if (cfg.autopilot) meetings.start();
   // You're busy at the keyboard, so she stays awake.
   let lastPing = 0;
   companion.on('activity', () => {
@@ -209,6 +226,8 @@ function summon() {
 // as your message once she's there. `woke`: you just said her name.
 async function summonWith({ heard = null, woke = false }) {
   if (!win) return;
+  // Notes and reminders said out loud are handled right here, with no model.
+  if (heard && handleSpoken(heard)) return;
   const cfg = config.get();
   const watching = cfg.look;
   // Read before she takes the keyboard: the clipboard first (reading a
@@ -247,6 +266,20 @@ function appChip({ app: name, text }) {
 
 function clipChip(text) {
   return { text: text.slice(0, 20000), label: text.trim().split('\n')[0].slice(0, 40) };
+}
+
+// "Note: …", "remind me in 20 minutes to …": done on the spot, she confirms.
+function handleSpoken(text) {
+  const said = notes.parse(text);
+  if (!said) return false;
+  if (said.kind === 'note') {
+    notes.addNote(said.text);
+    send('said', { kind: 'note', text: said.text });
+  } else {
+    notes.addReminder(said.at, said.text);
+    send('said', { kind: 'remind', text: said.text, when: when(said.at) });
+  }
+  return true;
 }
 
 async function rewriteInPlace(selection, instruction) {
@@ -324,6 +357,39 @@ function setHide(on) {
   config.set({ hide: on });
   win?.setContentProtection(on);
   refreshMenu();
+}
+
+// Apps whose notifications she tells you about.
+const NOTIFY_APPS = (process.env.CAPRI_NOTIFY_APPS || 'Slack,Messages,WhatsApp,Discord,Signal,Telegram')
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean);
+
+// A banner from an app on the list: she pops up with it and says who it's
+// from. The text stays on your screen; nothing goes to a model.
+function onNotification({ app: name, title, subtitle, body }) {
+  if (!NOTIFY_APPS.includes(String(name).toLowerCase())) return;
+  send('message', { app: name, title, subtitle, body: String(body ?? '').slice(0, 300) });
+}
+
+// The autopilot keeps the transcript on for meetings, and marks them in it
+// so /recap knows where each one starts and ends.
+function onMeetingStart({ title }) {
+  if (!config.get().listen) {
+    autoListening = true;
+    hearing.set.listen(true);
+  }
+  hearing.mark(`meeting start: ${title}`);
+  send('notice', { kind: 'meeting', text: `"${title}" started. i'm taking notes.`, mood: 'curious', quiet: true });
+}
+
+function onMeetingEnd({ title, last }) {
+  hearing.mark(`meeting end: ${title}`);
+  if (last && autoListening) {
+    autoListening = false;
+    hearing.set.listen(false);
+  }
+  send('notice', { kind: 'meeting', text: `"${title}" is over. /recap when you want the recap.`, mood: 'soft' });
 }
 
 function setToggle(key, on) {
@@ -424,8 +490,11 @@ function buildMenu() {
           { type: 'separator' },
           { label: 'Bring my selection from any app', type: 'checkbox', checked: cfg.anySelection, click: (item) => setToggle('anySelection', item.checked) },
           { label: 'Offer what I just copied', type: 'checkbox', checked: cfg.clipboard, click: (item) => setToggle('clipboard', item.checked) },
+          { label: 'Tell me about messages (Slack…)', type: 'checkbox', checked: cfg.notify, click: (item) => setToggle('notify', item.checked) },
+          { label: 'Meeting autopilot (calendar)', type: 'checkbox', checked: cfg.autopilot, click: (item) => setToggle('autopilot', item.checked) },
         ]
       : []),
+    { label: 'Open my voice notes', click: () => shell.openPath(notes.notesFile) },
     { label: 'Warp somewhere', click: () => send('warp') },
     { type: 'separator' },
     { label: 'Quit', click: () => app.quit() },
@@ -622,6 +691,32 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       return { text: lines.length ? `what i remember about you:\n${lines.join('\n')}` : "i don't have notes about you yet." };
     }
     // Routines: a prompt built here, sent like a message.
+    case 'notify':
+    case 'autopilot': {
+      if (!mac.supported) return { error: 'that one is macOS only.' };
+      if (arg === 'on' || arg === 'off') setToggle(name, arg === 'on');
+      else if (arg) return { error: `/${name} on|off` };
+      return { text: name === 'notify' ? `telling you about messages (${NOTIFY_APPS.join(', ')}): ${config.get().notify ? 'ON' : 'off'}` : `meeting autopilot: ${config.get().autopilot ? 'ON' : 'off'}` };
+    }
+    case 'note': {
+      if (!arg) return { text: `your notes are in ${notes.notesFile}` };
+      notes.addNote(arg);
+      return { text: 'noted.' };
+    }
+    case 'remind': {
+      const said = notes.parse(`remind me ${arg}`);
+      if (said?.kind !== 'remind') return { error: '/remind in 20 min to …  or  /remind at 15:30 to …' };
+      notes.addReminder(said.at, said.text);
+      return { text: `ok, ${when(said.at)}: ${said.text}` };
+    }
+    case 'reminders': {
+      const list = notes.list();
+      if (arg.startsWith('clear')) {
+        list.forEach((r) => notes.cancel(r.id));
+        return { text: 'reminders cleared.' };
+      }
+      return { text: list.length ? list.map((r) => `${when(r.at)}: ${r.text}`).join('\n') : 'no reminders. (/reminders clear wipes them)' };
+    }
     case 'recap':
       return { send: routines.recap(hearing.transcriptDir, arg) };
     case 'standup':
@@ -636,6 +731,8 @@ app.on('will-quit', () => {
   spaces?.stop();
   hearing?.stop();
   ci?.stop();
+  meetings?.stop();
+  notes.stop();
   mac.stop();
   companion?.stop();
   agent?.reset();

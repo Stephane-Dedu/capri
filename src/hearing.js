@@ -146,6 +146,8 @@ function setupHearing({ getWin, send, summon, changed }) {
       if (ears.inCall || Date.now() - lastAside < ASIDE_GAP) return null;
       lastAside = Date.now();
     }
+    // Reminders and messages: not over a call either, but never rate-limited.
+    if (kind === 'quiet-in-calls' && ears.inCall) return null;
     try {
       return await voice.synth(String(text).slice(0, 4000));
     } catch {
@@ -187,6 +189,8 @@ function setupHearing({ getWin, send, summon, changed }) {
 
   return {
     transcriptDir: transcript.dir,
+    // A line in the transcript about the transcript (meeting start / end).
+    mark: (text) => transcript.mark(text),
     // The tray toggles, for her /listen, /wake, /talk and /ptt commands.
     set: { listen: setListening, wake: setWake, talk: setTalk, ptt: setPtt, dance: setDance },
     labels: { listen: 'always listening (transcript)', wake: 'wake word "capri"', talk: 'talking out loud', ptt: `push-to-talk (hold ${PushToTalk.label})` },

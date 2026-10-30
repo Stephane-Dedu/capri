@@ -20,6 +20,8 @@ const DEFAULTS = {
   hide: true, // left out of screen shares, recordings and screenshots (you still see her)
   anySelection: true, // on summon, bring the text selected in the front app (macOS)
   clipboard: true, // on summon, offer what you copied in the last 2 minutes (macOS)
+  notify: false, // pop up and say who messaged you (Slack…), from notification banners (macOS)
+  autopilot: false, // transcript on during calendar meetings, then offer /recap (macOS)
   ci: false, // watch CI on your own repos' open PRs
   dailyCap: 0, // stop spending past this many dollars a day (0: no cap)
   sessions: {}, // project folder -> her last session there, for /resume

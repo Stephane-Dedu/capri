@@ -69,6 +69,8 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/recap [topic]`, `/standup` | Recap the last call, draft your standup (local files only) |
 | `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
 | `/ci on\|off`, `/dance on\|off`, `/hide on\|off` | Watch CI on your own repos, dance when music plays, stay out of screen shares |
+| `/note <text>`, `/remind in 20 min to …`, `/reminders [clear]` | A note to self, a reminder, your pending reminders |
+| `/notify on\|off`, `/autopilot on\|off` | Messages (Slack…) announced, meeting autopilot (macOS) |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
 | `/warp`, `/help` | Teleport somewhere / show this list |
@@ -110,7 +112,7 @@ Speech-to-text runs on your machine with whisper.cpp (large-v3-turbo by default,
 
 Recording a conversation can need everyone's consent where you are (it does in France): tell people, or keep the log off on calls.
 
-On macOS she needs a few permissions, for Electron or the terminal you start her from: **Microphone**, **Accessibility** (for the push-to-talk key) and **Screen Recording** (for the computer's audio; it's the same one as the screen look). The computer's audio comes through a small ScreenCaptureKit helper, `tools/capri-ears.swift`, which she builds the first time with the Xcode command line tools. On Windows it's Chromium's loopback capture, and her voice is the Windows one; neither has been tested there yet.
+On macOS she needs a few permissions, for Electron or the terminal you start her from: **Microphone**, **Accessibility** (the push-to-talk key, your selection in other apps, rewriting in place, message banners), **Calendars** (the meeting autopilot) and **Screen Recording** (for the computer's audio; it's the same one as the screen look). The computer's audio comes through a small ScreenCaptureKit helper, `tools/capri-ears.swift`, which she builds the first time with the Xcode command line tools. On Windows it's Chromium's loopback capture, and her voice is the Windows one; neither has been tested there yet.
 
 ### Routines
 
@@ -121,6 +123,9 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - **CI on your own repos** (off by default; `/ci on` or the tray): every 2 minutes she checks the open PRs you authored, with your `gh` login. Only repos owned by your GitHub account are queried, or by the owners you list in `CAPRI_CI_OWNERS`; the owner filter is part of the search, so work orgs never see a request from her. When a PR goes red she reads the failed job's log and one Haiku call says what broke, and she knocks on your window about it. When it goes green again, she says so, for free.
 - **Dancing** (off by default; `/dance on` or the tray): when music plays on the computer, she dances and bounces on the beats. It only measures loudness, with nothing transcribed, but it uses the same computer-audio capture as the transcript, so macOS shows its screen-recording indicator while it's on.
 - **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
+- **Notes and reminders**, said out loud (push-to-talk or "Capri, …") or typed: "note: call the bank", "note que la démo est jeudi", "remind me in 20 minutes to check the deploy", "rappelle-moi à 15h d'appeler Marc". They're handled on the spot, with no model call: notes go to a dated file (**Open my voice notes** in the tray, or `/note <text>`), reminders survive restarts and she comes and knocks on your window when one is due. `/remind in 20 min to …`, `/reminders` lists them, `/reminders clear` drops them.
+- **Messages** (off by default; `/notify on` or the tray): when Slack, Messages, WhatsApp, Discord, Signal or Telegram shows a notification, she pops up with it and says who it's from ("Slack message from Julie"). She reads the banner through Accessibility; the text stays on your screen and never goes to a model. `CAPRI_NOTIFY_APPS` changes the list. She keeps quiet during calls.
+- **Meeting autopilot** (off by default; `/autopilot on` or the tray): she reads your calendar on this Mac (Calendars permission, nothing fetched from a server). A minute before a meeting with a video link or other attendees she pops up; while it runs the transcript is on (she turns it back off after if it was off), with the meeting's start and end marked in it; at the end she offers `/recap`. Titles stay local unless you ask for the recap.
 
 ### Agent routing
 
@@ -202,7 +207,9 @@ When you share your screen, she isn't in it: **Hide me from screen shares** (on 
 - **The window you're in**: to sit on it, she reads the frame of the front window (position and size only, never its title or contents), now and then between jobs and every 0.7 s while she's sitting on it. It stays on your machine.
 - **Your microphone and the computer's audio**: only while the transcript, the wake word or push-to-talk needs them. Speech-to-text is whisper.cpp on 127.0.0.1, so audio never leaves your machine. Text reaches Claude only as the message you said to her, or when she reads the transcript to answer you. Her own voice is muted out of the log.
 - **GitHub**, with CI watching on: the open PRs you authored in repos owned by your own account (or `CAPRI_CI_OWNERS`), and a failed job's log when one goes red. Nothing else, and never another org's repos.
+- **Her notes and the spend meter** live in the app's data folder (`memory.md`, `spend.json`), with your voice notes and reminders (`notes.md`, `reminders.json`).
 - **Your selection and clipboard**: read only when you summon her (or rewrite by voice), never in the background. Password-manager copies are skipped. What's read goes to Claude only as part of the message you send.
+- **Notifications and your calendar**: with messages or the autopilot on, she reads notification banners and your Mac's calendar locally. None of it goes to a model: banners are shown and said out loud, and meeting titles only end up in the local transcript.
 
 ## Controls
 
@@ -239,6 +246,7 @@ Put any of these in `.env` (see `.env.example`):
 | `CAPRI_TRANSCRIPT_DAYS` | `14` | How long the transcript keeps a day |
 | `CAPRI_CI_OWNERS` | your `gh` account | GitHub accounts whose repos CI watching may look at, comma-separated |
 | `CAPRI_CI_EVERY` | `120` | Seconds between CI checks |
+| `CAPRI_NOTIFY_APPS` | `Slack,Messages,WhatsApp,Discord,Signal,Telegram` | Apps whose notifications she tells you about |
 | `CAPRI_CWD` | your home folder | Project folder she starts in |
 | `CAPRI_PORT` | `47913` | Port the hooks report to |
 | `CAPRI_START_HIDDEN` | unset | `1` starts her hidden in the tray |
@@ -274,6 +282,8 @@ src/
   costs.js       Today's spend per model, and the daily cap
   mac.js         Talks to the macOS helper: selection, rewriting in place, clipboard, notifications, calendar
   rewrite.js     Rewrites a selection as you asked, in one Haiku call
+  notes.js       Voice notes and reminders, parsed locally
+  meetings.js    The meeting autopilot
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
   config.js      Saved settings
   preload.js     The narrow bridge the page is allowed to use
