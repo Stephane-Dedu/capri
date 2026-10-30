@@ -6,6 +6,8 @@ const INCOMING = [
   'workspace',
   'ears',
   'ptt',
+  'music',
+  'beat',
   'wander',
   'reset',
   'notice',

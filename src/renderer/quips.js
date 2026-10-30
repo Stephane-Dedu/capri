@@ -26,6 +26,7 @@ window.Capri.QUIPS = {
     'your desktop needs more chaos. i volunteer.',
   ],
   dodge: ['Naw, c\'mon!', 'too slow, little baby~', 'Not yet.', "can't catch static."],
+  dance: ['ooh, this one slaps.', '*bzzt* bass detected.', 'Yessir, play it again.', "don't mind me. dancing."],
   woke: ['yeah?', 'mm?', "what's up?", 'Yessir?', 'talk to me.'],
   missed: ["didn't catch that.", 'huh? again?', '...static. say it again?'],
   ledge: ['nice window. mine now.', 'comfy up here.', "don't mind me. just sitting on your work.", 'Yessir, front-row seat.'],

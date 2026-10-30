@@ -33,6 +33,8 @@ function setupHearing({ getWin, send, summon, changed }) {
   whisper.on('status', (text) => send('notice', { kind: 'quip', text: `ears: ${text}`, quiet: true }));
   ears.on('warn', warn);
   ears.on('mic', () => syncMic());
+  ears.on('music', (on) => send('music', on));
+  ears.on('beat', (level) => send('beat', level));
 
   // Everything you say goes past the wake word first.
   ears.onSpeech = (text) => {
@@ -59,7 +61,7 @@ function setupHearing({ getWin, send, summon, changed }) {
         return;
       }
     }
-    send('ears', { mic, loopback: process.platform === 'win32' && ears.listening });
+    send('ears', { mic, loopback: process.platform === 'win32' && ears.systemWanted });
     changed();
   }
 
@@ -95,6 +97,12 @@ function setupHearing({ getWin, send, summon, changed }) {
     } else {
       ptt.stop();
     }
+    changed();
+  }
+
+  function setDance(on) {
+    config.set({ dance: on });
+    ears.setDance(on);
     changed();
   }
 
@@ -172,6 +180,7 @@ function setupHearing({ getWin, send, summon, changed }) {
   wake = cfg.wake;
   ears.wake = wake;
   if (cfg.listen) ears.setListening(true);
+  if (cfg.dance) ears.setDance(true);
   if (cfg.wake) whisper.start().catch((err) => warn(err.message));
   if (cfg.ptt) setTimeout(() => setPtt(true), 1500);
   getWin()?.webContents.once('did-finish-load', () => syncMic());
@@ -179,7 +188,7 @@ function setupHearing({ getWin, send, summon, changed }) {
   return {
     transcriptDir: transcript.dir,
     // The tray toggles, for her /listen, /wake, /talk and /ptt commands.
-    set: { listen: setListening, wake: setWake, talk: setTalk, ptt: setPtt },
+    set: { listen: setListening, wake: setWake, talk: setTalk, ptt: setPtt, dance: setDance },
     labels: { listen: 'always listening (transcript)', wake: 'wake word "capri"', talk: 'talking out loud', ptt: `push-to-talk (hold ${PushToTalk.label})` },
     info,
     menu,

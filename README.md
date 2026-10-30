@@ -21,9 +21,9 @@ Capri is a side project, built for fun, but she isn't a toy: she's a full Claude
 - **Talk to her, out loud.** Hold right ⌥ and talk, or say "Capri, …": she answers in a bitcrushed voice. With the always-on log, she can also tell you what was said on that call an hour ago. → [Talking out loud](#talking-out-loud)
 - **See what you're looking at.** Each summon, she takes one look at your screen: a quick remark in the chat, and what she saw goes along with your first message, so "what's this error?" needs no copy-paste. → [A look at your screen](#a-look-at-your-screen)
 - **Follow you around.** Switch to another Space or virtual desktop and she glitches out of the old one and tears back in on yours.
-- **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you.
+- **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you, and goes and knocks on your window about it. She can also watch CI on your own repos' pull requests. → [Routines](#routines)
 - **Know you.** She keeps short notes about you (name, habits, projects, running jokes) and reads them at the start of every conversation. `/recap` turns the last call into decisions and action items, `/standup` drafts your update. → [Routines](#routines)
-- **Look good doing it.** A traced cut-paper puppet animated on twos, with 14 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
+- **Look good doing it.** A traced cut-paper puppet animated on twos, with 16 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
 
@@ -107,6 +107,7 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - Both read local files only: no `git fetch`, no `gh`, no network, and they never create tickets, issues or messages anywhere.
 - **Her notes about you**: she saves short facts with her own `remember` / `forget` tools (no permission card) when she learns something that'll still matter next week, and reads them at the start of every conversation. `/memory` shows them, **Open her notes about me** in the tray opens the file to edit, and "forget that…" works in chat.
 - **CI on your own repos** (off by default; `/ci on` or the tray): every 2 minutes she checks the open PRs you authored, with your `gh` login. Only repos owned by your GitHub account are queried, or by the owners you list in `CAPRI_CI_OWNERS`; the owner filter is part of the search, so work orgs never see a request from her. When a PR goes red she reads the failed job's log and one Haiku call says what broke, and she knocks on your window about it. When it goes green again, she says so, for free.
+- **Dancing** (off by default; `/dance on` or the tray): when music plays on the computer, she dances and bounces on the beats. It only measures loudness, with nothing transcribed, but it uses the same computer-audio capture as the transcript, so macOS shows its screen-recording indicator while it's on.
 - **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
 
 ### Agent routing
@@ -159,6 +160,8 @@ She picks a pose from what's going on:
 | **perch**, **crossed**, **chill**, **float**, **lounge**, **hug** | Between jobs, changing every half minute or so |
 | **ledge**: sitting on the top edge of your window, legs dangling in front of it | Now and then between jobs, if the window you're in leaves room above it. Move the window or switch to another and she falls off |
 | **hang**: upside down off the top of the screen by her knees, mane hanging | Now and then between jobs. She comes down when you open the chat or give her work |
+| **knock**: on the edge of your window, rapping on it with a claw | Another session (or a CI run) needs you |
+| **dance**: arms up and swaying, legs kicking, bouncing on the beat | Music's playing, with dancing on |
 | **sleep**: curled up, eyes shut | Nothing from you for 4 minutes. Move the mouse near her, save a file or use Claude Code and she's up again |
 
 Each reply starts with a hidden mood tag (`[[smug]]`, `[[hype]]`, `[[glitch]]`…) that sets her face and how she moves: hype bounces, flares her hair and opens her jaw, annoyed makes the hair bristle, soft slows her down, glitch jitters everything.

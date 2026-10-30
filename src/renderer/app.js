@@ -98,6 +98,7 @@
     toldBlind: false, // said once that macOS won't let her see the screen
     voiceTurn: false, // you said the current request out loud, so she answers out loud
     lastReply: '', // her latest message, for reading back
+    music: false, // music is playing on the computer: she dances
     nudged: '', // the day she last offered the standup
     following: false,
     spot: null, // { kind: 'ledge' | 'hang', until, … } while she sits on a window or hangs off the top
@@ -459,7 +460,8 @@
   function behave(now) {
     if (state.acting || state.moving || drag || rig.sleeping) return;
     tendSpot(now);
-    if (state.spot) return;
+    // On a spot, or dancing: she stays put.
+    if (state.spot || state.music) return;
     if (now >= state.nextQuip) {
       state.nextQuip = now + rand(45000, 100000);
       if (!chat.isOpen && Math.random() < 0.6) say(pick(QUIPS.idle));
@@ -510,6 +512,7 @@
     if (chat.pendingAsk !== null && chat.isOpen) return 'point';
     if (state.replying) return state.working;
     if (state.spot) return state.spot.kind;
+    if (state.music) return 'dance';
     if (!chat.isOpen && now - state.lastActivity > SLEEP_AFTER) return 'sleep';
     if (now > state.idlePoseUntil) {
       let next = weighted(IDLE_POSES);
@@ -578,6 +581,12 @@
     if (chat.isOpen) chat.anchor(state.pos, SIZE);
     if (!bubble.hidden) positionBubble();
     if (!cutin.el.hidden) positionCutIn();
+  }
+
+  // A line with her face popping up in close-up next to it.
+  function pop(text, mood = 'curious', ms = 4200) {
+    say(text, ms);
+    cutIn(mood);
   }
 
   // Her face in close-up beside her for a couple of seconds. The chat
@@ -814,7 +823,7 @@
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
@@ -981,10 +990,45 @@
     if (n.kind === 'done') celebrate();
     else if (n.kind === 'attention') {
       touch();
-      strikePose('crouch', 1800);
       cutIn('curious');
-      act(() => warp(nearbySpot(60, 140), 'hop'));
+      // A session (or a CI run) needs you: she goes and knocks on your
+      // window, or crouches and hops if there's no window to sit on.
+      if (n.project) act(knockOnWindow);
+      else {
+        strikePose('crouch', 1800);
+        act(() => warp(nearbySpot(60, 140), 'hop'));
+      }
     } else rig.pulse(0.5, 140);
+  });
+
+  async function knockOnWindow() {
+    if (await perchOnWindow()) {
+      strikePose('knock', 3200);
+      if (state.info.talk) voice.knock();
+    } else {
+      strikePose('crouch', 1800);
+      await warp(nearbySpot(60, 140), 'hop');
+    }
+  }
+
+  // Music on the computer's audio: she dances, bouncing on the beats.
+  bridge.on('music', (on) => {
+    state.music = on;
+    if (on) {
+      touch();
+      rig.setMood('hype', 4000);
+      if (Math.random() < 0.6) pop(pick(QUIPS.dance), 'hype', 2400);
+      // Off the window (or the top of the screen) and onto the dance floor.
+      if (state.spot) act(() => warp(nearbySpot(60, 160), 'hop'));
+    }
+  });
+  bridge.on('beat', (level) => {
+    if (!state.music || state.moving || drag) return;
+    rig.pulse(0.12 + level * 0.2, 60);
+    squash(1 + 0.05 * level, 1 - 0.05 * level);
+    setTimeout(() => {
+      if (!state.moving) squash(1, 1);
+    }, 90);
   });
 
   function celebrate() {

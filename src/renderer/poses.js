@@ -100,6 +100,18 @@ window.Capri = window.Capri || {};
       legA: [172, -96, -14], legB: [8, 96, 14], armA: [104, -14, 40], armB: [76, 14, -40],
       fidget: [['legA', 1, 14, 0.7, 0], ['legB', 1, 14, 0.7, Math.PI], ['legA', 2, 10, 0.7, 1], ['legB', 2, 10, 0.7, 4.1]],
     },
+    // On the ledge, rapping on your window with one claw: a session needs you.
+    knock: {
+      legA: [172, -96, -14], legB: [8, 96, 14], armA: [104, -14, 40], armB: [18, 78, 24],
+      torso: 6, head: 12, front: ['armB'],
+      fidget: [['armB', 1, -20, 3.5, 0], ['armB', 0, -6, 3.5, 0], ['legA', 1, 8, 0.7, 0]],
+    },
+    // Music's on: arms up and swaying in turn, legs kicking.
+    dance: {
+      legA: [104, 34, 22], legB: [76, -34, -22], armA: [-124, -18, -14], armB: [-56, 18, 14],
+      head: -3, lift: [0, -8],
+      fidget: [['armA', 0, 22, 1, 0], ['armB', 0, 22, 1, Math.PI], ['armA', 1, 14, 2, 0], ['armB', 1, 14, 2, Math.PI], ['legA', 1, 20, 2, 0], ['legB', 1, 20, 2, Math.PI]],
+    },
     // Hanging off the top of the screen by her knees. The rig is drawn
     // upside down for this one (app.js flips it), so her legs point down
     // here and her arms up, dangling. Her knees are at KNEE_Y.

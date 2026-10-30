@@ -32,9 +32,30 @@ class Ears extends EventEmitter {
       me: new Segmenter((samples) => this.heard('me', samples)),
       call: new Segmenter((samples) => this.heard('call', samples)),
     };
+    this.dance = false; // follow the computer's audio for music, even with the log off
+    this.groove = new Groove();
+    this.groove.on('music', (on) => this.emit('music', on));
+    this.groove.on('beat', (level) => this.emit('beat', level));
     this.system = process.platform === 'darwin' ? new SystemAudio(binDir) : null;
     this.system?.on('frame', (samples) => this.feed('call', samples));
     this.system?.on('error', (message) => this.emit('warn', `can't hear the computer's audio: ${message}`));
+  }
+
+  // The computer's audio is needed for the log and for dancing.
+  get systemWanted() {
+    return this.listening || this.dance;
+  }
+
+  syncSystem() {
+    if (this.systemWanted) this.system?.start();
+    else this.system?.stop();
+    if (!this.dance) this.groove.reset();
+  }
+
+  setDance(on) {
+    this.dance = on;
+    this.syncSystem();
+    this.emit('mic');
   }
 
   // The page needs the mic for the log and for push-to-talk.
@@ -55,15 +76,14 @@ class Ears extends EventEmitter {
     if (on) {
       this.transcript.prune();
       this.whisper.start().catch((err) => this.emit('warn', err.message));
-      this.system?.start();
-    } else {
-      this.system?.stop();
     }
+    this.syncSystem();
     this.emit('mic');
   }
 
   feed(source, samples) {
     if (Date.now() < this.mutedUntil) return; // her own voice
+    if (source === 'call' && this.dance) this.groove.push(samples);
     if (source === 'me' && this.question) this.question.push(samples);
     else if (this.listening || (source === 'me' && this.wake)) this.segmenters[source]?.push(samples);
   }
@@ -108,6 +128,58 @@ class Ears extends EventEmitter {
 
   stop() {
     this.system?.stop();
+  }
+}
+
+// Music on the computer's audio, for her to dance to: steady sound without
+// the pauses speech has, held for a few seconds, and its beats (sudden jumps
+// in loudness). Levels only; nothing is transcribed.
+class Groove extends EventEmitter {
+  constructor() {
+    super();
+    this.carry = new Float32Array(0);
+    this.recent = []; // the last ~4 s of window levels
+    this.avg = 0;
+    this.sinceBeat = 0;
+    this.streak = 0; // windows in a row that agree on music / no music
+    this.playing = false;
+  }
+
+  push(samples) {
+    const buf = join([this.carry, samples]);
+    let i = 0;
+    for (; i + WIN <= buf.length; i += WIN) this.window(buf.subarray(i, i + WIN));
+    this.carry = buf.slice(i);
+  }
+
+  window(w) {
+    let sum = 0;
+    for (const v of w) sum += v * v;
+    const rms = Math.sqrt(sum / w.length);
+    this.recent.push(rms);
+    if (this.recent.length > 133) this.recent.shift();
+    const mean = this.recent.reduce((a, b) => a + b, 0) / this.recent.length;
+    const quiet = this.recent.filter((v) => v < 0.008).length / this.recent.length;
+    const music = this.recent.length > 100 && mean > 0.015 && quiet < 0.05;
+    this.streak = music === this.playing ? 0 : this.streak + 1;
+    if (this.streak > 100) {
+      this.playing = music;
+      this.streak = 0;
+      this.emit('music', music);
+    }
+    this.sinceBeat++;
+    if (this.playing && rms > this.avg * 1.35 && rms > 0.02 && this.sinceBeat > 9) {
+      this.sinceBeat = 0;
+      this.emit('beat', Math.min(1, rms * 5));
+    }
+    this.avg += (rms - this.avg) * 0.1;
+  }
+
+  reset() {
+    this.recent = [];
+    if (this.playing) this.emit('music', false);
+    this.playing = false;
+    this.streak = 0;
   }
 }
 
@@ -256,4 +328,4 @@ function join(parts) {
   return out;
 }
 
-module.exports = { Ears, Segmenter };
+module.exports = { Ears, Segmenter, Groove };

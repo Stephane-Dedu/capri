@@ -101,6 +101,30 @@ window.Capri = window.Capri || {};
       for (const node of [source, crush, low, high, meter]) node.disconnect();
     }
 
+    // Two quick raps on your window: filtered clicks, no file needed.
+    async knock() {
+      const ctx = await context();
+      const length = Math.round(ctx.sampleRate * 0.05);
+      const rap = ctx.createBuffer(1, length, ctx.sampleRate);
+      const data = rap.getChannelData(0);
+      for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (length / 6));
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1400;
+      band.Q.value = 3;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.7;
+      band.connect(gain).connect(ctx.destination);
+      this.onStart(500);
+      for (const at of [0, 0.16]) {
+        const source = ctx.createBufferSource();
+        source.buffer = rap;
+        source.connect(band);
+        source.start(ctx.currentTime + at);
+      }
+      setTimeout(() => band.disconnect(), 800);
+    }
+
     // How loud she is right now, roughly 0..1.
     get level() {
       if (!this.meter) return 0;

@@ -355,6 +355,7 @@ function buildMenu() {
     { label: 'Look at my screen when summoned', type: 'checkbox', checked: cfg.look, click: (item) => setLook(item.checked) },
     { type: 'separator' },
     ...(hearing?.menu() ?? []),
+    { label: 'Dance to music', type: 'checkbox', checked: cfg.dance, click: (item) => hearing.set.dance(item.checked) },
     { type: 'separator' },
     { label: 'Watch CI on my own repos', type: 'checkbox', checked: cfg.ci, click: (item) => setCI(item.checked) },
     { label: 'Open her notes about me', click: () => shell.openPath(memory.file()) },
@@ -514,6 +515,11 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (arg === 'on' || arg === 'off') hearing.set[name](arg === 'on');
       else if (arg) return { error: `/${name} on|off` };
       return { text: `${hearing.labels[name]}: ${config.get()[name] ? 'ON' : 'off'}` };
+    }
+    case 'dance': {
+      if (arg === 'on' || arg === 'off') hearing.set.dance(arg === 'on');
+      else if (arg) return { error: '/dance on|off' };
+      return { text: `dancing to music: ${config.get().dance ? 'ON' : 'off'}` };
     }
     case 'ci': {
       if (arg === 'on' || arg === 'off') setCI(arg === 'on');
