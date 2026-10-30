@@ -242,7 +242,7 @@ When you share your screen, she isn't in it: **Hide me from screen shares** (on 
 |---|---|
 | Click Capri | Open / close the chat |
 | Drag Capri | Move her (she doesn't love it) |
-| Right-click Capri / tray icon | Menu: project, permissions, model, new conversation, hooks, commentary, wander, follow, look, warp, quit |
+| Right-click Capri / tray icon | Menu: project, permissions, model, new conversation, hooks, commentary, wander, follow, hide from shares, look, voice and transcript, dancing, CI, her notes, warp, quit |
 | `Cmd+Shift+Space` (macOS), `Ctrl+Shift+Space` | Summon: she warps next to your cursor with the chat open, onto your desktop, with your Neovim selection |
 | Hold right ⌥ / right Alt, talk, let go | Push-to-talk: a summon that sends what you said, and she answers out loud |
 | Say "Capri, …" | The same, hands-free, with the wake word on |
@@ -373,6 +373,15 @@ py tools/trace_portrait.py
 
 ## Ideas for next steps
 
+- Steer your other Claude Code sessions from her: answer their permission prompts from her bubble, send follow-ups, a board of what's running
+- Background jobs in git worktrees, each shown as a small glitch clone of her parked at the screen edge
+- Real-time voice: interrupt her by talking, speak sentence by sentence as the reply streams, a better local voice
+- Read the front app's text through Accessibility (terminal output, browser URL, editor buffer) instead of a screenshot
+- Two-way Neovim: her findings as diagnostics on the right lines, edits applied straight to the buffer
+- The focused tmux pane as a chip on summon, like the Neovim selection
+- A packaged, signed Capri.app, so permissions go to her rather than to your terminal
+- A settings panel instead of the long tray menu
+- Speaker labels in the transcript
 - Multi-monitor roaming
 
 ## Credits
