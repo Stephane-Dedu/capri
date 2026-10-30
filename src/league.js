@@ -729,6 +729,44 @@ class League extends EventEmitter {
     this.emit('notice', { kind, project: 'champ select', text, mood });
   }
 
+  // Where League is at, in a few words, for the note in front of her next
+  // message; null when the client isn't open. Asks the client when the
+  // watcher isn't running.
+  async now() {
+    let phase = this.phase;
+    if (!this.timer) {
+      // Not watching: ask, but not more than every 15 s while the client's closed
+      // (finding it means looking through the running processes).
+      if (this.closedAt && Date.now() - this.closedAt < 15000) return null;
+      phase = await this.lcu.get('/lol-gameflow/v1/gameflow-phase').catch(() => null);
+      this.closedAt = phase ? 0 : Date.now();
+    }
+    if (!phase) return null;
+    const words = {
+      None: 'the client is open',
+      Lobby: 'in a lobby',
+      Matchmaking: 'in queue',
+      ReadyCheck: 'the queue just popped',
+      ChampSelect: 'in champ select',
+      GameStart: 'the game is loading',
+      InProgress: 'in a game',
+      Reconnect: 'reconnecting to a game',
+      WaitingForStats: 'the game just ended',
+      PreEndOfGame: 'the game just ended',
+      EndOfGame: 'on the end-of-game screen',
+    }[phase] ?? phase;
+    let draft = '';
+    if (phase === 'ChampSelect') {
+      const session = await this.lcu.get('/lol-champ-select/v1/session').catch(() => null);
+      const live = session && (await this.read(session).catch(() => null));
+      if (live) {
+        const names = (list) => list.map((p) => p.name).join(', ') || 'nothing yet';
+        draft = ` (you: ${live.role ? ROLE_NAMES[live.role] : 'no role'}${live.locked ? `, locked ${live.locked.name}` : live.intent ? `, hovering ${this.champ(live.intent).name}` : ''}; your team: ${names(live.allies)}; theirs: ${names(live.enemies)}${live.bans.length ? `; bans: ${names(live.bans)}` : ''})`;
+      }
+    }
+    return `${words}${draft}${this.brb ? '; brb is on' : ''}`;
+  }
+
   // For /league.
   async describe() {
     await this.data?.load().catch(() => {});

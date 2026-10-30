@@ -113,6 +113,7 @@ function start() {
   // Her pick call-outs, in your Discord voice channel when she's there (discord.js).
   league.on('callout', ({ text, mine }) => {
     const said = discord.say(text);
+    if (said) saidAloud(text, 'in Discord');
     // Your own turn already has its card; your friends' turns show here too.
     if (!mine) send('notice', { kind: 'quip', project: 'champ select', text, mood: 'mischief', quiet: said });
   });
@@ -208,7 +209,38 @@ function fitToScreen() {
 }
 
 function send(channel, payload) {
+  // What she says out loud outside the chat, so she knows what she said.
+  // (A quiet notice wasn't said: a Discord call-out records itself.)
+  if (channel === 'notice' && payload?.text && !payload.quiet) saidAloud(payload.text, 'on the desktop');
+  if (channel === 'league' && payload?.line) saidAloud(payload.line, 'on the desktop');
   if (win && !win.webContents.isDestroyed()) win.webContents.send(`capri:${channel}`, payload);
+}
+
+// ---- what's going on, for her next message ---------------------------------
+
+// Her lines outside the chat (notices, turn cards, Discord call-outs), kept a
+// few minutes: her chat never sees them otherwise.
+const SAID_FOR = 10 * 60000;
+const said = [];
+function saidAloud(text, where) {
+  said.push({ at: Date.now(), text: String(text).slice(0, 160), where });
+  while (said.length > 8 || (said[0] && Date.now() - said[0].at > SAID_FOR)) said.shift();
+}
+
+const clock = (t) => new Date(t).toTimeString().slice(0, 5);
+
+// A note from the app in front of your message: League, Discord, what she
+// said out loud lately and who the squad is. Only the parts there are.
+async function situation() {
+  const lines = [];
+  const lol = await league.now().catch(() => null);
+  if (lol) lines.push(`League: ${lol}`);
+  if (discord.connected) lines.push(`Discord: she's in the voice channel "${discord.channel.name}" with the user`);
+  const recent = said.filter((x) => Date.now() - x.at <= SAID_FOR);
+  if (recent.length) lines.push(`She said out loud: ${recent.map((x) => `${clock(x.at)} ${x.where} "${x.text}"`).join(' · ')}`);
+  const squad = league.squad.players();
+  if (squad.length) lines.push(`Squad: ${squad.map((p) => `${p.name}${p.aka?.length ? ` (${p.aka[0]})` : ''}${p.me ? ' = the user' : ''}`).join(', ')}`);
+  return lines.length ? `(From the app, not the user. Right now: ${lines.join('. ')}.)` : null;
 }
 
 function info() {
@@ -666,7 +698,7 @@ ipcMain.handle('capri:status', () => info());
 // A selection from another app, or what you just copied, in front of your words.
 const quoted = (intro, text, message) => `${intro}:\n"""\n${String(text).slice(0, 20000)}\n"""\n\n${message}`;
 
-ipcMain.on('capri:chat', (_event, text, { selection, clip, screen: seen, voice } = {}) => {
+ipcMain.on('capri:chat', async (_event, text, { selection, clip, screen: seen, voice } = {}) => {
   let message = String(text).slice(0, 50000);
   // Said out loud: her answer is read back (see "Talking out loud" in persona.js).
   if (voice) message = `(spoken) ${message}`;
@@ -674,6 +706,9 @@ ipcMain.on('capri:chat', (_event, text, { selection, clip, screen: seen, voice }
   if (selection?.app) message = quoted(`I've selected this in ${selection.app}`, selection.text, message);
   else if (selection) message = nvim.prompt(selection, message);
   if (seen?.summary) message = look.prompt(seen, message);
+  // What's going on (League, Discord, what she said out loud, the squad) goes first.
+  const now = await situation().catch(() => null);
+  if (now) message = `${now}\n\n${message}`;
   // The daily cap: nothing new gets sent once it's reached.
   if (costs.over) {
     send('agent:error', { kind: 'cap', message: `$${costs.cap}` });
@@ -868,7 +903,9 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (sub === 'on' || sub === 'off') setDiscord(sub === 'on');
       else if (sub === 'say') {
         if (!rest.length) return { error: '/discord say <text>' };
-        return discord.say(rest.join(' ')) ? { text: 'said it in Discord.' } : { error: `not in a voice channel (${discord.status}).` };
+        if (!discord.say(rest.join(' '))) return { error: `not in a voice channel (${discord.status}).` };
+        saidAloud(rest.join(' '), 'in Discord');
+        return { text: 'said it in Discord.' };
       } else if (sub) return { error: '/discord on|off|say <text>' };
       return { text: `discord call-outs: ${config.get().discord ? 'ON' : 'off'} · ${discord.status}` };
     }
