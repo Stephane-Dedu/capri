@@ -26,6 +26,7 @@ const rewrite = require('./rewrite');
 const { notes, when } = require('./notes');
 const { Meetings } = require('./meetings');
 const league = require('./league');
+const voice = require('./voice');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -58,6 +59,8 @@ if (!app.requestSingleInstanceLock()) {
 function start() {
   if (process.platform === 'win32') app.setAppUserModelId('capri');
   const cfg = config.get();
+  // Her voice as you last set it (/voice).
+  if (cfg.voice) voice.configure(cfg.voice);
   agent = new Agent({ cwd: cfg.cwd, model: cfg.model });
   for (const event of AGENT_EVENTS) agent.on(event, (payload) => send(`agent:${event}`, payload));
   agent.on('ready', ({ sessionId, commands: list }) => {
@@ -442,6 +445,35 @@ function saveRiotKey(key) {
   fs.writeFileSync(riotKeyFile(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(key) : key, { mode: 0o600 });
 }
 
+// A line in character to try a voice on.
+const VOICE_SAMPLE = "Hi, little baby! Your pick: Sylas, fifty-six percent. Naw, c'mon, lock it in!";
+
+function voiceStatus() {
+  const v = voice.settings();
+  const detail = {
+    kokoro: ` · ${voice.blendName(v.blend)} at ${v.speed}×`,
+    chatterbox: ` · cloned from ${v.reference ? path.basename(v.reference) : 'no clip yet'}, energy ${v.energy}, pace ${v.pace}`,
+  }[v.engine] ?? '';
+  return `voice: ${v.engine}${detail}`;
+}
+
+// /voice try|set <blend> [speed x] ["text"]: the blend, speed and line.
+function parseVoiceArgs(text) {
+  let rest = text;
+  const quoted = rest.match(/"([^"]+)"|“([^”]+)”/);
+  if (quoted) rest = rest.replace(quoted[0], ' ');
+  const number = (name, lo, hi) => {
+    const m = rest.match(new RegExp(`\\b${name}\\s+([\\d.]+)`, 'i'));
+    if (!m) return null;
+    rest = rest.replace(m[0], ' ');
+    return Math.min(hi, Math.max(lo, Number(m[1])));
+  };
+  const speed = number('speed', 0.5, 2);
+  const energy = number('energy', 0.25, 2);
+  const pace = number('pace', 0, 1);
+  return { blend: rest.trim() || null, speed, energy, pace, line: quoted ? (quoted[1] ?? quoted[2]) : null };
+}
+
 const BRB_ON = "brb mode: i'll accept the queue, ban, and lock in your hover or your best pool pick with a few seconds left. /back when you're back.";
 
 // Her League folder's files, created on first open so there's something to edit.
@@ -804,6 +836,48 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (arg === 'off') league.setBrb(false, "ok, you're back. all yours.");
       else league.setBrb(true, BRB_ON);
       return { text: league.brb ? 'brb: ON' : 'brb: off' };
+    case 'voice': {
+      const [sub = '', ...rest] = arg.split(/\s+/);
+      if (!sub) return { text: voiceStatus() };
+      if (voice.ENGINES.includes(sub)) {
+        // /voice chatterbox <clip>: the reference to clone (kept in her data folder).
+        const clip = sub === 'chatterbox' && rest.length ? rest.join(' ').replace(/^~(?=\/)/, os.homedir()).replace(/^["']|["']$/g, '') : null;
+        try {
+          voice.configure({ engine: sub, reference: clip ? voice.keepReference(clip) : undefined });
+        } catch (err) {
+          return { error: `/voice: ${err.message}` };
+        }
+        config.set({ voice: voice.settings() });
+        // The clone server takes a moment to start: get it going now.
+        if (sub === 'chatterbox') voice.startChatterbox().catch((err) => send('notice', { kind: 'quip', text: `cloned voice: ${err.message}`, mood: 'annoyed' }));
+        return { text: voiceStatus() };
+      }
+      if (sub === 'voices') return { text: `Kokoro's voices (English): ${voice.kokoroVoices().map((v) => v.split('_')[1]).join(', ')}. f/m and US/UK: ${voice.kokoroVoices().join(' ')}` };
+      if (sub === 'reset') {
+        voice.configure(config.get().voice ?? { engine: 'system' });
+        return { text: voiceStatus() };
+      }
+      if (sub === 'try' || sub === 'set') {
+        const { blend, speed, energy, pace, line } = parseVoiceArgs(rest.join(' '));
+        try {
+          // A blend means Kokoro; otherwise the engine she's on, retuned.
+          const kokoro = Boolean(blend) || voice.settings().engine === 'kokoro';
+          voice.configure({ engine: kokoro ? 'kokoro' : undefined, blend: blend ? voice.blendName(blend) : undefined, speed: speed ?? undefined, energy: energy ?? undefined, pace: pace ?? undefined });
+          // The first time, Kokoro's model downloads (~90 MB); the clone
+          // server takes a while to start.
+          if (kokoro) await voice.prepare();
+          else if (voice.settings().engine === 'chatterbox') {
+            const ready = await Promise.race([voice.startChatterbox().then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 30000))]);
+            if (!ready) return { text: `${voiceStatus()}. Her cloned voice is still starting (the first time downloads the model): try again in a minute.` };
+          }
+        } catch (err) {
+          return { error: `/voice: ${err.message}` };
+        }
+        if (sub === 'set') config.set({ voice: voice.settings() });
+        return { text: `${voiceStatus()}${sub === 'set' ? ', kept.' : '. /voice set keeps it, /voice reset goes back.'}`, say: line ?? VOICE_SAMPLE };
+      }
+      return { error: '/voice try <blend> [speed x] ["text"] · /voice try energy 0.7 pace 0.5 "text" (cloned voice) · /voice set · /voice voices · /voice chatterbox <clip> · /voice kokoro|elevenlabs|system · /voice reset' };
+    }
     case 'back':
       league.setBrb(false, "welcome back. it's all yours.");
       return { text: 'brb: off' };

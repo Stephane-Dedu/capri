@@ -886,12 +886,13 @@
     '/ci on|off watch CI on your own repos · /dance on|off dance when music plays · /hide on|off out of screen shares',
     '/note <text> · /remind in 20 min to … · /reminders · /undo put back my last edits · /notify on|off messages · /autopilot on|off meetings',
     '/league on|off|update draft help in champ select · /league key RGAPI-… GM+ solo queue data · /brb i draft for you (queue, ban, lock) · /back',
+    '/voice try bella 60 + sky 40 speed 1.1 "text" audition a voice · /voice set keep it · /voice voices · /voice kokoro|elevenlabs|system',
     `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders', 'undo', 'league', 'brb', 'back'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders', 'undo', 'league', 'brb', 'back', 'voice'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
@@ -925,6 +926,11 @@
         bridge.chat(result.send, {});
       } else {
         chat.addSys(result.text);
+        // /voice try: she says a line in the voice you're trying.
+        if (result.say) {
+          const wav = await bridge.synth(result.say, 'audition').catch(() => null);
+          if (wav) voice.play(wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength));
+        }
       }
     } else {
       // Claude Code's own slash commands, skills and custom commands.

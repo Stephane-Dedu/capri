@@ -141,7 +141,8 @@ function setupHearing({ getWin, send, summon, changed }) {
   // A WAV of her saying `text`, or null. Asides (her one-liners, "done!")
   // stay quiet during calls and come at most every 20 seconds.
   ipcMain.handle('capri:synth', async (_event, text, kind) => {
-    if (!config.get().talk) return null;
+    // /voice try: always, it's you asking to hear her.
+    if (kind !== 'audition' && !config.get().talk) return null;
     if (kind === 'aside') {
       if (ears.inCall || Date.now() - lastAside < ASIDE_GAP) return null;
       lastAside = Date.now();

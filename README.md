@@ -76,6 +76,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/notify on\|off`, `/autopilot on\|off` | Messages (Slack…) announced, meeting autopilot (macOS) |
 | `/league on\|off\|update`, `/league key RGAPI-…` | League champ select help, refresh the pro data now, your Riot API key for high-elo solo queue games |
 | `/brb`, `/back` | Draft for you while you're away, and stop |
+| `/voice try <blend> [speed x] ["text"]`, `/voice set`, `/voice voices`, `/voice kokoro\|elevenlabs\|system` | Design her voice: hear a blend of Kokoro voices, keep it, list them, pick the engine |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
 | `/warp`, `/help` | Teleport somewhere / show this list |
@@ -150,6 +151,15 @@ Out of game only: champ select, never anything once the game loads. Turn it on w
 - **The pro data** is [Oracle's Elixir](https://oracleselixir.com)'s match data: every game of the major and minor leagues this year, downloaded from its public Google Drive folder the first time and refreshed every 3 days (last year's too, early in the year). It's boiled down to a small JSON in her `league` data folder. Drive sometimes refuses the download for a day when the file has been popular ("over quota"); she keeps the copy she has, and you can download the CSV from oracleselixir.com yourself and drop it in that folder (**Open the pro data folder** in the tray). Pro play isn't solo queue, so she says so when it matters; your own record and your squad notes are what bring it back to how you actually play.
 - **High-elo solo queue** (with your Riot API key): she collects ranked solo games from the top of your server's ladder, Diamond and up by default (`CAPRI_SOLOQ_TIER`: `emerald`, `diamond`, `master`, `grandmaster` or `challenger`), and keeps a game only when at least 5 of the 10 players are at that level right now. There are far more Diamond+ games than a development key can fetch (about 100 requests every 2 minutes, roughly 2,500 games an hour), so the crawl runs in the background whenever she has a key: the ladder once a day (all of Diamond is about 200 pages), then random players' new games, appended to a file as they come. She keeps the newest 60,000 games of the last 21 days (`CAPRI_SOLOQ_MAX`, `CAPRI_SOLOQ_DAYS`), so after a day of running a common lane matchup has hundreds of games. Stats are rebuilt in the background every 20 minutes, without freezing her. Once there's solo queue data, a pro game counts half as much. Get a key at [developer.riotgames.com](https://developer.riotgames.com) and give it to her with `/league key RGAPI-…` (it's checked, then kept encrypted in the keychain, and never sent to a model) or as `RIOT_API_KEY` in `.env`. A development key expires after 24 hours; when it does she tells you, and `/league key` with a new one picks up where she stopped. A personal API key (register a project on the same site) doesn't expire. Your server comes from the League client, or `CAPRI_RIOT_PLATFORM` (`euw1` by default). The games are stored without player names or ids.
 - **How she reads the client**: through the League client's local API on 127.0.0.1, the same one Blitz, Porofessor and U.GG use (the port and password come from its lockfile). She reads your champ select, mastery, match history and party, and hovers, bans, locks and accepts through it. Locking a pick or ban from her chat goes through a permission card, because it's final.
+
+### Her voice
+
+Three engines, each falling back to the next, all through her bitcrusher glitch:
+
+- **Kokoro**, local and free: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) running inside Capri, about twice as fast as real time on a Mac's CPU. You design her voice by blending its English preset voices by ear: `/voice try bella 60 + sky 40 speed 1.1 "Naw, c'mon!"` says the line right away (`/voice voices` lists the presets), `/voice set` keeps it, `/voice reset` goes back. The model (~90 MB) downloads into her data folder the first time. English only, so a French line goes to the next engine.
+- **ElevenLabs**: a voice you designed there (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`; `/voice elevenlabs`). Recent lines are cached, so a repeated one isn't paid for twice.
+- **System**: the macOS voice (Samantha, or Amélie for French), as before.
+
 
 ### Agent routing
 
@@ -272,6 +282,7 @@ Put any of these in `.env` (see `.env.example`):
 | `CAPRI_CI_OWNERS` | your `gh` account | GitHub accounts whose repos CI watching may look at, comma-separated |
 | `CAPRI_CI_EVERY` | `120` | Seconds between CI checks |
 | `CAPRI_NOTIFY_APPS` | `Slack,Messages,WhatsApp,Discord,Signal,Telegram` | Apps whose notifications she tells you about |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` | unset | Her voice from ElevenLabs, on the desktop and on Discord (`CAPRI_ELEVENLABS_MODEL`: `eleven_flash_v2_5`) |
 | `CAPRI_LEAGUE_DIR` | the default install | League of Legends install folder (the one with `lockfile`), if it isn't in the default place |
 | `RIOT_API_KEY` | unset | Riot API key for high-elo solo queue games (`/league key` overrides it) |
 | `CAPRI_RIOT_PLATFORM` | from the client, else `euw1` | Your League server for Riot's API (`na1`, `kr`, `eun1`…) |
@@ -305,7 +316,7 @@ src/
   whisper.js     Runs whisper-server and sends it clips
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
-  voice.js       Her voice: the OS speech synthesizer, French or English
+  voice.js       Her voice: Kokoro (local, a blend you design), ElevenLabs, or the OS speech synthesizer
   ci.js          Watches CI on your own repos' open PRs with gh
   routines.js    The /recap and /standup prompts
   memory.js      Her notes about you, and her remember / forget tools
