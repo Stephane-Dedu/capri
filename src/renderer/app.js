@@ -820,12 +820,13 @@
     '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|off talk out loud · /ptt on|off push-to-talk',
     '/recap [topic] the last call · /standup your update · /memory what i know about you · /cost today\'s spend · /cap <$>|off',
     '/ci on|off watch CI on your own repos · /dance on|off dance when music plays · /hide on|off out of screen shares',
+    '/note <text> · /remind in 20 min to … · /reminders · /undo put back my last edits · /notify on|off messages · /autopilot on|off meetings',
     `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders', 'undo'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];

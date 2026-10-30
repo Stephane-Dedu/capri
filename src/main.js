@@ -717,6 +717,12 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       }
       return { text: list.length ? list.map((r) => `${when(r.at)}: ${r.text}`).join('\n') : 'no reminders. (/reminders clear wipes them)' };
     }
+    case 'undo': {
+      const result = await agent.undo();
+      if (result.error) return { error: result.error };
+      const names = result.files.map((f) => path.basename(f));
+      return { text: names.length ? `put back ${names.length} file${names.length === 1 ? '' : 's'}: ${names.join(', ')}` : 'nothing had changed since then.' };
+    }
     case 'recap':
       return { send: routines.recap(hearing.transcriptDir, arg) };
     case 'standup':

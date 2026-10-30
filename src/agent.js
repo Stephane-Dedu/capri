@@ -4,6 +4,7 @@
 // permission prompts are surfaced as events so her chat panel can show them.
 
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { EventEmitter } = require('node:events');
 const { z } = require('zod');
 const { AGENT_PROMPT, transcriptPrompt } = require('./persona');
@@ -25,6 +26,8 @@ const TIERS = {
 const ESCALATE = 'mcp__capri__escalate';
 // Her own in-process tools (the hand-off, her notes) never need your OK.
 const OWN_TOOLS = /^mcp__capri__/;
+// Tools whose edits /undo can put back (the SDK checkpoints the files first).
+const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 // Follow-ups this soon after a job on the strong model stay on it.
 const STICKY_MS = 10 * 60000;
 const DEEP_HINTS =
@@ -93,6 +96,7 @@ class Agent extends EventEmitter {
     this.sessionId = null;
     this.resumeId = null;
     this.transcripts = null; // her always-on transcript folder, which she may read
+    this.turns = []; // { uuid, edited, undone } per message you sent, for /undo
     this.busy = false;
     this.idleSince = 0;
     this.interrupted = false;
@@ -197,7 +201,9 @@ class Agent extends EventEmitter {
     if (!this.fixed) await this.useTier(this.pickTier(text), 'auto');
     if (!this.session) await this.open();
     this.setBusy(true);
-    this.session.inbox.push({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null });
+    const uuid = randomUUID();
+    this.turns = [...this.turns.slice(-49), { uuid, edited: false, undone: false }];
+    this.session.inbox.push({ type: 'user', uuid, message: { role: 'user', content: text }, parent_tool_use_id: null });
   }
 
   async open() {
@@ -237,6 +243,8 @@ class Agent extends EventEmitter {
         systemPrompt: { type: 'preset', preset: 'claude_code', append: appended },
         additionalDirectories: this.transcripts ? [this.transcripts] : undefined,
         includePartialMessages: true,
+        // Backups of files before she edits them, so /undo can put them back.
+        enableFileCheckpointing: true,
         // She asks her questions in chat instead of through a dialog.
         disallowedTools: ['AskUserQuestion'],
         mcpServers: { capri: createSdkMcpServer({ name: 'capri', tools: [escalate, remember, forget] }) },
@@ -311,6 +319,7 @@ class Agent extends EventEmitter {
           this.streamed = 0;
         } else if (block.type === 'tool_use') {
           this.setBusy(true);
+          if (EDIT_TOOLS.has(block.name) && this.turns.length) this.turns.at(-1).edited = true;
           // The hand-off shows up as a route event, not as a tool call.
           if (block.name === ESCALATE) this.hidden.add(block.id);
           else this.emit('tool', { id: block.id, name: block.name, summary: this.summarize(block.name, block.input) });
@@ -397,6 +406,7 @@ class Agent extends EventEmitter {
   reset() {
     const session = this.session;
     this.session = null;
+    this.turns = [];
     this.sessionId = null;
     this.cancelAsks();
     this.setBusy(false);
@@ -404,6 +414,20 @@ class Agent extends EventEmitter {
       session.inbox.close();
       session.q.close();
     }
+  }
+
+  // Puts back the files her last editing turn changed, with the SDK's own
+  // checkpoints. Changes made through shell commands aren't tracked.
+  async undo() {
+    if (this.busy) return { error: "i'm still working. /stop first, then /undo." };
+    const turn = [...this.turns].reverse().find((t) => t.edited && !t.undone);
+    if (!turn || !this.session) return { error: 'nothing of mine to undo in this conversation.' };
+    // The dry run lists the files; the real rewind doesn't always.
+    const preview = await this.session.q.rewindFiles(turn.uuid, { dryRun: true });
+    const result = await this.session.q.rewindFiles(turn.uuid);
+    if (!result?.canRewind) return { error: "can't undo that: " + (result?.error ?? 'no checkpoint') };
+    turn.undone = true;
+    return { files: result.filesChanged?.length ? result.filesChanged : (preview?.filesChanged ?? []) };
   }
 
   // The next message continues an earlier session instead of a fresh one.

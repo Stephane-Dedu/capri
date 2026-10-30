@@ -24,6 +24,7 @@ Capri is a side project, built for fun, but she isn't a toy: she's a full Claude
 - **Keep an eye on your other sessions.** Through Claude Code hooks she tells you when a session in another terminal finishes or is waiting on you, and goes and knocks on your window about it. She can also watch CI on your own repos' pull requests. → [Routines](#routines)
 - **Know you.** She keeps short notes about you (name, habits, projects, running jokes) and reads them at the start of every conversation. `/recap` turns the last call into decisions and action items, `/standup` drafts your update. → [Routines](#routines)
 - **Work with whatever you're in.** On summon she brings what you've selected in any app, and what you just copied. Select a Slack draft, hold right ⌥ and say "make this nicer" or "in English": she rewrites it in place. → [Any app](#any-app)
+- **Keep track for you.** "Note: …" and "remind me in 20 minutes to …" by voice, Slack and other messages announced as they come, meetings from your calendar transcribed and ready for `/recap`, `/undo` for her last edits.
 - **Look good doing it.** A traced cut-paper puppet animated on twos, with 16 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
@@ -70,6 +71,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
 | `/ci on\|off`, `/dance on\|off`, `/hide on\|off` | Watch CI on your own repos, dance when music plays, stay out of screen shares |
 | `/note <text>`, `/remind in 20 min to …`, `/reminders [clear]` | A note to self, a reminder, your pending reminders |
+| `/undo` | Put back the files her last editing turn changed |
 | `/notify on\|off`, `/autopilot on\|off` | Messages (Slack…) announced, meeting autopilot (macOS) |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
@@ -126,6 +128,7 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - **Notes and reminders**, said out loud (push-to-talk or "Capri, …") or typed: "note: call the bank", "note que la démo est jeudi", "remind me in 20 minutes to check the deploy", "rappelle-moi à 15h d'appeler Marc". They're handled on the spot, with no model call: notes go to a dated file (**Open my voice notes** in the tray, or `/note <text>`), reminders survive restarts and she comes and knocks on your window when one is due. `/remind in 20 min to …`, `/reminders` lists them, `/reminders clear` drops them.
 - **Messages** (off by default; `/notify on` or the tray): when Slack, Messages, WhatsApp, Discord, Signal or Telegram shows a notification, she pops up with it and says who it's from ("Slack message from Julie"). She reads the banner through Accessibility; the text stays on your screen and never goes to a model. `CAPRI_NOTIFY_APPS` changes the list. She keeps quiet during calls.
 - **Meeting autopilot** (off by default; `/autopilot on` or the tray): she reads your calendar on this Mac (Calendars permission, nothing fetched from a server). A minute before a meeting with a video link or other attendees she pops up; while it runs the transcript is on (she turns it back off after if it was off), with the meeting's start and end marked in it; at the end she offers `/recap`. Titles stay local unless you ask for the recap.
+- **`/undo`** puts back the files her last editing turn changed (each turn is checkpointed before she edits), and the next `/undo` goes one turn further. It covers her file edits, not what she changed through shell commands, and only in the current conversation.
 
 ### Agent routing
 
