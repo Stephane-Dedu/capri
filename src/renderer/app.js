@@ -19,7 +19,8 @@
   const CUTIN_VIEW = [55, 118, 380, 226];
   const CUTIN_MS = 2300;
   // Poses: what she does with herself between jobs, and when she nods off.
-  const IDLE_POSES = { perch: 3, crossed: 3, chill: 2, float: 2, lounge: 2, hug: 2 };
+  // Lounging and chilling most of the time; perch and float now and then.
+  const IDLE_POSES = { lounge: 4, chill: 4, crossed: 2, hug: 2, perch: 1, float: 1 };
   // Spots she likes: the top edge of the window you're in, and the top of
   // the screen, hanging upside down by her knees. Where she meets the edge,
   // as fractions of her sprite box, and how long she stays.
@@ -117,7 +118,7 @@
     dodgeReadyAt: 0,
     info: {},
     lastActivity: performance.now(),
-    idlePose: 'perch',
+    idlePose: 'lounge',
     working: 'think', // 'think' until the first tool call, then 'hack'
     idlePoseUntil: 0,
     poseOverride: null, // { pose, until }
