@@ -1,4 +1,7 @@
-// Her voice, from one of three engines (/voice):
+// Her voice, from one of four engines (/voice):
+// - chatterbox: a voice cloned from a short reference clip (only with its
+//   owner's consent), by Chatterbox (Resemble AI, MIT) running locally:
+//   tools/capri-tts.py with the Python from her chatterbox venv. English.
 // - kokoro: a local voice you design by blending Kokoro's preset voices
 //   ("bella 60 + sky 40") at a speed. Runs on your machine, free; English only
 //   (its phonemizer is), so French lines go to the next engine.
@@ -12,7 +15,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 
 const VOICES = {
   darwin: { en: process.env.CAPRI_VOICE_EN || 'Samantha', fr: process.env.CAPRI_VOICE_FR || 'Amélie' },
@@ -31,17 +34,22 @@ const cache = new Map();
 // Kokoro: the 82M model in its 8-bit version (~90 MB, downloaded once).
 const KOKORO_MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 const KOKORO_RATE = 24000;
-const ENGINES = ['kokoro', 'elevenlabs', 'system'];
+const ENGINES = ['chatterbox', 'kokoro', 'elevenlabs', 'system'];
 // What each engine falls back to, in order (the system voice is always last).
-const FALLBACKS = { kokoro: ['kokoro', 'elevenlabs'], elevenlabs: ['elevenlabs'], system: [] };
+const FALLBACKS = { chatterbox: ['chatterbox', 'kokoro', 'elevenlabs'], kokoro: ['kokoro', 'elevenlabs'], elevenlabs: ['elevenlabs'], system: [] };
+const CHATTERBOX_PORT = Number(process.env.CAPRI_TTS_PORT) || 47916;
 
 const elevenReady = () => Boolean(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_VOICE_ID);
-let settings = { engine: elevenReady() ? 'elevenlabs' : 'system', blend: 'bella', speed: 1 };
+// energy, pace: Chatterbox's exaggeration (0.25 calm to 2 theatrical) and cfg weight (lower is slower).
+let settings = { engine: elevenReady() ? 'elevenlabs' : 'system', blend: 'bella', speed: 1, reference: null, energy: 0.5, pace: 0.5 };
 
 // Her voice settings (main.js keeps them in her config): { engine, blend, speed }.
 function configure(next = {}) {
+  const before = settings.reference;
   settings = { ...settings, ...Object.fromEntries(Object.entries(next).filter(([, v]) => v !== undefined && v !== null)) };
   if (!ENGINES.includes(settings.engine)) settings.engine = 'system';
+  // A new reference clip: the clone server restarts with it next time.
+  if (settings.reference !== before) stopChatterbox();
   return settings;
 }
 
@@ -85,10 +93,10 @@ function language(text) {
 async function synth(text) {
   const words = speakable(text);
   if (!words) return null;
-  const key = `${settings.engine}|${settings.blend}|${settings.speed}|${words}`;
+  const key = `${settings.engine}|${settings.blend}|${settings.speed}|${settings.reference}|${settings.energy}|${settings.pace}|${words}`;
   if (cache.has(key)) return cache.get(key);
   const english = language(words) === 'en';
-  const engines = { kokoro: kokoroSay, elevenlabs: eleven };
+  const engines = { chatterbox: chatterboxSay, kokoro: kokoroSay, elevenlabs: eleven };
   let wav = null;
   for (const engine of FALLBACKS[settings.engine] ?? []) {
     if (engine !== 'elevenlabs' && !english) continue; // the local voices speak English
@@ -106,6 +114,124 @@ async function synth(text) {
     if (cache.size > CACHE) cache.delete(cache.keys().next().value);
   }
   return wav;
+}
+
+// ---- Chatterbox ------------------------------------------------------------------
+
+let chatter = null; // Promise of the running server
+let chatterChild = null;
+
+function dataDir() {
+  try {
+    return require('electron').app.getPath('userData');
+  } catch {
+    return path.join(os.homedir(), 'Library', 'Application Support', 'capri');
+  }
+}
+
+// Her chatterbox venv's Python (CAPRI_CHATTERBOX_PYTHON to use another).
+function chatterboxPython() {
+  const venv = path.join(dataDir(), 'chatterbox', 'venv');
+  return process.env.CAPRI_CHATTERBOX_PYTHON || (process.platform === 'win32' ? path.join(venv, 'Scripts', 'python.exe') : path.join(venv, 'bin', 'python'));
+}
+
+// Keeps a copy of the reference clip in her data folder, so the original can
+// move; returns its path.
+function keepReference(file) {
+  const ext = path.extname(file).toLowerCase() || '.wav';
+  const target = path.join(dataDir(), 'chatterbox', `reference${ext}`);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(file, target);
+  return target;
+}
+
+// Starts tools/capri-tts.py once (the first start downloads the model, a few
+// GB) and waits until it answers.
+function startChatterbox() {
+  chatter ??= (async () => {
+    const python = chatterboxPython();
+    if (!fs.existsSync(python)) throw new Error("Chatterbox isn't installed (its venv is missing)");
+    if (!settings.reference || !fs.existsSync(settings.reference)) throw new Error('no reference clip (/voice chatterbox <clip>)');
+    const script = path.join(__dirname, '..', 'tools', 'capri-tts.py');
+    const child = spawn(python, [script, '--port', String(CHATTERBOX_PORT), '--reference', settings.reference], {
+      stdio: ['ignore', 'ignore', process.env.CAPRI_DEBUG ? 'inherit' : 'ignore'],
+    });
+    chatterChild = child;
+    child.on('exit', () => {
+      if (chatterChild === child) {
+        chatterChild = null;
+        chatter = null;
+      }
+    });
+    for (let i = 0; i < 1800; i++) {
+      if (child.exitCode !== null) throw new Error('Chatterbox exited on startup');
+      try {
+        await fetch(`http://127.0.0.1:${CHATTERBOX_PORT}/`, { signal: AbortSignal.timeout(500) });
+        return child;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+    child.kill();
+    throw new Error('Chatterbox did not start');
+  })().catch((err) => {
+    chatter = null;
+    throw err;
+  });
+  return chatter;
+}
+
+function stopChatterbox() {
+  chatterChild?.kill();
+  chatterChild = null;
+  chatter = null;
+}
+
+// Text in pieces for the clone: whole sentences, at least MIN_WORDS words
+// each (alone, a fragment like "Ashen, Varus." comes out as seconds of
+// babble), at most MAX_CHARS characters unless one sentence is longer.
+const CLONE_MIN_WORDS = 8;
+const CLONE_MAX_CHARS = 250;
+function clonePieces(words) {
+  const sentences = (words.match(/[^.!?]+[.!?]*/g) ?? [words]).map((x) => x.trim()).filter(Boolean);
+  const pieces = [];
+  for (const sentence of sentences) {
+    const last = pieces.at(-1);
+    const short = (text) => text.split(/\s+/).length < CLONE_MIN_WORDS;
+    if (last && (short(last) || short(sentence) || last.length + sentence.length + 1 <= CLONE_MAX_CHARS) && last.length + sentence.length + 1 <= CLONE_MAX_CHARS * 1.5) pieces[pieces.length - 1] = `${last} ${sentence}`;
+    else pieces.push(sentence);
+  }
+  return pieces;
+}
+
+// Her line in the cloned voice, as one 24 kHz WAV.
+async function chatterboxSay(words) {
+  await startChatterbox();
+  const chunks = [];
+  let rate = 24000;
+  const once = async (piece) => {
+    const res = await fetch(`http://127.0.0.1:${CHATTERBOX_PORT}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: piece, exaggeration: Number(settings.energy) || 0.5, cfg_weight: Number(settings.pace) || 0.5 }),
+      signal: AbortSignal.timeout(180000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  };
+  const seconds = (wav) => (wav.length - 44) / 2 / wav.readUInt32LE(24);
+  for (const piece of clonePieces(words)) {
+    let wav = await once(piece);
+    // Babble runs long: a take over twice the length its words need gets
+    // one more try, and the shorter one is kept.
+    if (seconds(wav) > 2 * (piece.split(/\s+/).length / 2.7 + 1)) {
+      const again = await once(piece);
+      if (seconds(again) < seconds(wav)) wav = again;
+    }
+    rate = wav.readUInt32LE(24);
+    chunks.push(wav.subarray(44), Buffer.alloc(Math.round(0.12 * rate) * 2));
+  }
+  return wavOf(Buffer.concat(chunks), rate);
 }
 
 // ---- Kokoro ---------------------------------------------------------------------
@@ -282,4 +408,4 @@ function run(cmd, args) {
   });
 }
 
-module.exports = { synth, speakable, language, wavOf, configure, settings: () => ({ ...settings }), prepare, kokoroVoices, parseBlend, blendName, ENGINES };
+module.exports = { clonePieces, synth, speakable, language, wavOf, configure, settings: () => ({ ...settings }), prepare, kokoroVoices, parseBlend, blendName, ENGINES, keepReference, startChatterbox, stopChatterbox };

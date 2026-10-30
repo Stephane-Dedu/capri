@@ -154,9 +154,15 @@ Out of game only: champ select, never anything once the game loads. Turn it on w
 
 ### Her voice
 
-Three engines, each falling back to the next, all through her bitcrusher glitch:
+Four engines, each falling back to the next, all through her bitcrusher glitch:
 
 - **Kokoro**, local and free: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0) running inside Capri, about twice as fast as real time on a Mac's CPU. You design her voice by blending its English preset voices by ear: `/voice try bella 60 + sky 40 speed 1.1 "Naw, c'mon!"` says the line right away (`/voice voices` lists the presets), `/voice set` keeps it, `/voice reset` goes back. The model (~90 MB) downloads into her data folder the first time. English only, so a French line goes to the next engine.
+- **Chatterbox**, a cloned voice, local: [Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI, MIT) copies a voice from a 10 to 20 second clip of one person talking, no music. **Only clone a voice whose owner said yes.** Everything it makes carries Resemble's inaudible watermark, so it can be told apart from a real recording. Install it once in its own environment:
+  ```sh
+  python3 -m venv ~/Library/Application\ Support/capri/chatterbox/venv
+  ~/Library/Application\ Support/capri/chatterbox/venv/bin/pip install chatterbox-tts "setuptools<80"
+  ```
+  (the watermarker still needs `pkg_resources`, which newer setuptools dropped). Then `/voice chatterbox ~/path/to/clip.mp3`: she keeps a copy of the clip, starts `tools/capri-tts.py` (the first time downloads the model, about 3 GB) and talks in that voice. `/voice try energy 0.8 "Naw, c'mon!"` tunes how theatrical she is (0.25 to 2), `pace` how fast (0 to 1). It's slower than Kokoro (roughly real time on a Mac's GPU, a few seconds for a short line), English only, and falls back to Kokoro, then ElevenLabs, then the system voice.
 - **ElevenLabs**: a voice you designed there (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`; `/voice elevenlabs`). Recent lines are cached, so a repeated one isn't paid for twice.
 - **System**: the macOS voice (Samantha, or Amélie for French), as before.
 
@@ -317,6 +323,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: Kokoro (local, a blend you design), ElevenLabs, or the OS speech synthesizer
+  (tools/capri-tts.py: the Chatterbox server for a cloned voice)
   ci.js          Watches CI on your own repos' open PRs with gh
   routines.js    The /recap and /standup prompts
   memory.js      Her notes about you, and her remember / forget tools

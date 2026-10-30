@@ -897,6 +897,7 @@ app.on('will-quit', () => {
   ci?.stop();
   meetings?.stop();
   league.shutdown();
+  voice.stopChatterbox();
   notes.stop();
   mac.stop();
   companion?.stop();
