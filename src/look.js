@@ -8,6 +8,7 @@ const os = require('node:os');
 const { desktopCapturer, screen, systemPreferences } = require('electron');
 const { loadSdk, claudeEnv, TIERS } = require('./agent');
 const { LOOK_PROMPT, MOODS } = require('./persona');
+const costs = require('./costs');
 
 const MODEL = process.env.CAPRI_LOOK_MODEL || TIERS.fast.model;
 const LONG_EDGE = 1568; // the largest image Claude takes without shrinking it
@@ -35,6 +36,7 @@ async function capture(point) {
 
 // { mood, comment, summary } from the fast model, or null.
 async function describe(jpeg) {
+  if (costs.over) return null; // the daily cap
   const abortController = new AbortController();
   const timer = setTimeout(() => abortController.abort(), TIMEOUT);
   try {
@@ -65,7 +67,9 @@ async function describe(jpeg) {
       },
     });
     for await (const m of q) {
-      if (m.type === 'result') return m.subtype === 'success' && !m.is_error ? parse(m.result) : null;
+      if (m.type !== 'result') continue;
+      costs.add(MODEL, m.total_cost_usd);
+      return m.subtype === 'success' && !m.is_error ? parse(m.result) : null;
     }
     return null;
   } catch {

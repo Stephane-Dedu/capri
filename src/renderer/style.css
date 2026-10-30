@@ -160,8 +160,19 @@ body {
 }
 
 #mode[hidden],
-#brain[hidden] {
+#brain[hidden],
+#spend[hidden] {
   display: none;
+}
+
+/* Today's spend: quiet, until the daily cap is reached. */
+#spend {
+  font-size: 10px;
+  color: rgba(244, 247, 255, 0.5);
+}
+
+#spend[data-over="true"] {
+  color: var(--pink);
 }
 
 /* Which model is answering: quiet for the fast one, lit up for the big one. */

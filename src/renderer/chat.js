@@ -210,7 +210,16 @@ window.Capri = window.Capri || {};
       return null;
     }
 
-    setInfo({ project, model, routing, modeLabel, mode }) {
+    setInfo({ project, model, routing, modeLabel, mode, spend }) {
+      // Today's spend, once there's something to show; pink at the cap.
+      if (spend) {
+        const el = this.root.querySelector('#spend');
+        el.textContent = `$${spend.total < 10 ? spend.total.toFixed(2) : Math.round(spend.total)}`;
+        el.hidden = spend.total < 0.005;
+        el.dataset.over = String(spend.cap > 0 && spend.total >= spend.cap);
+        const rows = Object.entries(spend.models).map(([m, usd]) => `${shortModel(m)}: $${usd.toFixed(3)}`);
+        el.title = `today, estimated${spend.cap ? ` (cap $${spend.cap})` : ''}\n${rows.join('\n')}`;
+      }
       this.subEl.textContent = `//${project ?? 'netlink'}`;
       this.subEl.title = model ? `model: ${model}` : '';
       // "haiku" from "claude-haiku-5-5"; the full name is in the tooltip.

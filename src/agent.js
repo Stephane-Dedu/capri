@@ -228,10 +228,27 @@ class Agent extends EventEmitter {
         stderr: process.env.CAPRI_DEBUG ? (d) => console.warn('[agent]', d.trimEnd()) : undefined,
       },
     });
+    // Spend per model so far, from the running totals in each result. A
+    // resumed session's first result also counts the old turns, so it only
+    // sets the baseline.
+    const session = { q, inbox, spent: this.resumeId ? null : {} };
     this.resumeId = null;
-    const session = { q, inbox };
     this.session = session;
     this.pump(session);
+  }
+
+  // 'spend' events, per model, for what this turn added to the totals.
+  countSpend(usage) {
+    const session = this.session;
+    if (!session) return;
+    const totals = Object.fromEntries(Object.entries(usage).map(([model, u]) => [model, u.costUSD ?? 0]));
+    if (session.spent) {
+      for (const [model, usd] of Object.entries(totals)) {
+        const added = usd - (session.spent[model] ?? 0);
+        if (added > 0) this.emit('spend', { model, usd: added });
+      }
+    }
+    session.spent = totals;
   }
 
   async pump(session) {
@@ -289,6 +306,7 @@ class Agent extends EventEmitter {
       }
     } else if (m.type === 'result') {
       this.setBusy(false);
+      this.countSpend(m.modelUsage ?? {});
       this.emit('done', {
         ok: m.subtype === 'success' && !m.is_error,
         interrupted: this.interrupted,

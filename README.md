@@ -97,6 +97,10 @@ Recording a conversation can need everyone's consent where you are (it does in F
 
 On macOS she needs a few permissions, for Electron or the terminal you start her from: **Microphone**, **Accessibility** (for the push-to-talk key) and **Screen Recording** (for the computer's audio; it's the same one as the screen look). The computer's audio comes through a small ScreenCaptureKit helper, `tools/capri-ears.swift`, which she builds the first time with the Xcode command line tools. On Windows it's Chromium's loopback capture, and her voice is the Windows one; neither has been tested there yet.
 
+### Routines
+
+- **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
+
 ### Agent routing
 
 One conversation, two brains. Each message goes to one of them, and both see the whole conversation:
@@ -235,6 +239,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: the OS speech synthesizer, French or English
+  costs.js       Today's spend per model, and the daily cap
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
   config.js      Saved settings
   preload.js     The narrow bridge the page is allowed to use

@@ -48,6 +48,7 @@
     model_not_found: "that model doesn't exist for you. /model auto fixes it.",
     max_output_tokens: '...reply cut off at the token limit.',
     engine: "claude code flatlined under me. is `claude` installed and logged in?",
+    cap: "today's spend hit your daily cap, so i'm sitting this one out. /cost shows it, /cap 10 raises it, /cap off drops it.",
   };
 
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -799,6 +800,9 @@
     'any other /command goes to claude code',
   ].join('\n');
 
+  // Commands main answers (her setup, routines) rather than Claude Code.
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'cost', 'cap'];
+
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
     const lower = name.toLowerCase();
@@ -818,7 +822,7 @@
       } else {
         chat.addSys(`poses: ${rig.poses.join(' · ')} (i hold one for a minute)`);
       }
-    } else if (['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt'].includes(lower)) {
+    } else if (MAIN_COMMANDS.includes(lower)) {
       chat.addUser(text);
       const result = await bridge.command(lower, arg);
       if (result.error) {

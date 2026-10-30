@@ -16,6 +16,7 @@ const nvim = require('./nvim');
 const look = require('./look');
 const { frontmost } = require('./frontmost');
 const { setupHearing } = require('./hearing');
+const costs = require('./costs');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -56,6 +57,9 @@ function start() {
     refreshMenu();
   });
   agent.on('route', () => send('agent:info', info()));
+  // The cost meter: her chat, plus the one-liners and looks (costs.js).
+  agent.on('spend', ({ model, usd }) => costs.add(model, usd));
+  costs.on('change', () => send('agent:info', info()));
 
   companion = new Companion({
     isSelf: (id) => Boolean(id) && id === agent.sessionId,
@@ -167,6 +171,7 @@ function info() {
     reactions: cfg.reactions,
     hooks: hooks.status(),
     ...hearing?.info(),
+    spend: { total: costs.total, models: costs.models, cap: costs.cap },
   };
 }
 
@@ -401,6 +406,11 @@ ipcMain.on('capri:chat', (_event, text, { selection, screen: seen, voice } = {})
   if (voice) message = `(spoken) ${message}`;
   if (selection) message = nvim.prompt(selection, message);
   if (seen?.summary) message = look.prompt(seen, message);
+  // The daily cap: nothing new gets sent once it's reached.
+  if (costs.over) {
+    send('agent:error', { kind: 'cap', message: `$${costs.cap}` });
+    return;
+  }
   agent.send(message).catch((err) => send('agent:error', { kind: 'engine', message: String(err.message ?? err) }));
 });
 
@@ -485,6 +495,20 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       if (arg === 'on' || arg === 'off') hearing.set[name](arg === 'on');
       else if (arg) return { error: `/${name} on|off` };
       return { text: `${hearing.labels[name]}: ${config.get()[name] ? 'ON' : 'off'}` };
+    }
+    case 'cost': {
+      const rows = Object.entries(costs.models).map(([model, usd]) => `${model.replace(/^claude-/, '')} $${usd.toFixed(3)}`);
+      return { text: `today: $${costs.total.toFixed(2)}${rows.length ? ` (${rows.join(' · ')})` : ''}${costs.cap ? ` · cap $${costs.cap}` : ' · no cap'}. estimates from the SDK, not a bill.` };
+    }
+    case 'cap': {
+      if (arg === 'off') config.set({ dailyCap: 0 });
+      else if (arg) {
+        const dollars = Number(arg.replace(/^\$/, ''));
+        if (!(dollars > 0)) return { error: '/cap <dollars> or /cap off' };
+        config.set({ dailyCap: dollars });
+      }
+      send('agent:info', info());
+      return { text: costs.cap ? `daily cap: $${costs.cap} (today so far $${costs.total.toFixed(2)})` : 'no daily cap.' };
     }
     default:
       return { error: `unknown command /${name}` };

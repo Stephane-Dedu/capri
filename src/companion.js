@@ -12,6 +12,7 @@ const { execFile } = require('node:child_process');
 const { EventEmitter } = require('node:events');
 const { QUIP_PROMPT, MOODS } = require('./persona');
 const { loadSdk, claudeEnv } = require('./agent');
+const costs = require('./costs');
 
 const PORT = Number(process.env.CAPRI_PORT) || 47913;
 const QUIP_MODEL = process.env.CAPRI_QUIP_MODEL || 'claude-haiku-5-5';
@@ -205,7 +206,7 @@ class Companion extends EventEmitter {
   // One line from a small model, with no tools and no settings, so it costs
   // a fraction of a cent and can't touch anything.
   async quip(note) {
-    if (this.quipping) return null;
+    if (this.quipping || costs.over) return null;
     this.quipping = true;
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(), QUIP_TIMEOUT);
@@ -227,7 +228,9 @@ class Companion extends EventEmitter {
         },
       });
       for await (const m of q) {
-        if (m.type === 'result') return m.subtype === 'success' && !m.is_error ? parseLine(m.result) : null;
+        if (m.type !== 'result') continue;
+        costs.add(QUIP_MODEL, m.total_cost_usd);
+        return m.subtype === 'success' && !m.is_error ? parseLine(m.result) : null;
       }
       return null;
     } catch {
