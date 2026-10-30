@@ -25,6 +25,7 @@ Capri is a side project, built for fun, but she isn't a toy: she's a full Claude
 - **Know you.** She keeps short notes about you (name, habits, projects, running jokes) and reads them at the start of every conversation. `/recap` turns the last call into decisions and action items, `/standup` drafts your update. → [Routines](#routines)
 - **Work with whatever you're in.** On summon she brings what you've selected in any app, and what you just copied. Select a Slack draft, hold right ⌥ and say "make this nicer" or "in English": she rewrites it in place. → [Any app](#any-app)
 - **Keep track for you.** "Note: …" and "remind me in 20 minutes to …" by voice, Slack and other messages announced as they come, meetings from your calendar transcribed and ready for `/recap`, `/undo` for her last edits.
+- **Draft with you in League.** In champ select she shows your best picks with champion icons and a chance to win, worked out from recent pro games and high-elo solo queue on your server, every enemy matchup and your own record on each champion. She knows your squad's pools, and if you need to brb she accepts the queue, bans and locks in for you. → [League of Legends](#league-of-legends)
 - **Look good doing it.** A traced cut-paper puppet animated on twos, with 16 poses, 8 moods, a live face and a pink-and-cyan glitch tear. → [What she looks like](#what-she-looks-like)
 
 ## Run it
@@ -73,6 +74,8 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/note <text>`, `/remind in 20 min to …`, `/reminders [clear]` | A note to self, a reminder, your pending reminders |
 | `/undo` | Put back the files her last editing turn changed |
 | `/notify on\|off`, `/autopilot on\|off` | Messages (Slack…) announced, meeting autopilot (macOS) |
+| `/league on\|off\|update`, `/league key RGAPI-…` | League champ select help, refresh the pro data now, your Riot API key for high-elo solo queue games |
+| `/brb`, `/back` | Draft for you while you're away, and stop |
 | `/commands` | List Claude Code's slash commands in this project |
 | `/pose [name]` | Strike a pose for a minute (no name lists them) |
 | `/warp`, `/help` | Teleport somewhere / show this list |
@@ -130,6 +133,23 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - **Meeting autopilot** (off by default; `/autopilot on` or the tray): she reads your calendar on this Mac (Calendars permission, nothing fetched from a server). A minute before a meeting with a video link or other attendees she pops up; while it runs the transcript is on (she turns it back off after if it was off), with the meeting's start and end marked in it; at the end she offers `/recap`. Titles stay local unless you ask for the recap.
 - **`/undo`** puts back the files her last editing turn changed (each turn is checkpointed before she edits), and the next `/undo` goes one turn further. It covers her file edits, not what she changed through shell commands, and only in the current conversation.
 - **Your day**: she yawns and falls asleep sooner after midnight, comments on your weekend coding and Friday evenings, gets sleepy on low battery and perks up when you plug in, tells you to stretch after two hours without a break, and gives a Friday-afternoon, weekend or late-night deploy a look. All canned, no model.
+
+### League of Legends
+
+Out of game only: champ select, never anything once the game loads. Turn it on with `/league on` or **League of Legends › Help me draft in champ select** in the tray.
+
+- **Your turn**: when your ban or pick comes up, she strikes a thinking pose, then comes over with a card: champion icons, each with a chance to win and why (`you 63% in 41 · 57% vs Lulu (23) · pro 52% support`), and says the top one out loud. In her chat, "what should I pick?" or "what beats Zed and Lee Sin mid?" gets the same card and her take on it.
+- **Counters first.** For "what should I pick into Jax, Sejuani, Katarina, Seraphine, Ashe?" she ranks every champion in your role by its **draft %**: its win rate in the role, plus its record against your lane opponent (both of them in bot lane), less so against each other enemy, and with your teammates' picks. Only then does she look at your pool and say what it costs ("Shaco 50%, 1 point below the strongest"), and with several roles she compares them, so "which role should I play" gets an answer too. Each squad friend you ask about gets the same, in their roles.
+- **The chance to win** on your card adds **your own edge** to the draft %: your record on that champion from your last 100 Summoner's Rift games in the client, compared with your overall win rate, so winning a lot in general doesn't inflate every pick. Champions you don't play count as your average, not as a penalty.
+- **Honest numbers.** Real differences between champions are small (a champion's win rate in its role spreads about 3 points, a lane matchup about 4), so every record is pulled toward the average by a few hundred games' worth: a 2-0 says almost nothing, a 300-game record says something. Matchups with fewer than 8 games (lane) or 15 (other pairings) never show up as reasons. Expect most numbers between 47% and 56%, and close to 50% everywhere while there's little data. The ranking is what matters; a card saying 75% would be lying. Enemy roles are hidden in ranked, so they're guessed from where each champion is played.
+- **Your squad**: tell her who you play with ("Oswiz jungles, Amumu and Xin, random invades get him gapped…") and she saves it with her `league_squad` tool, or edit **League of Legends › Open my squad** (`squad.json`): in-game names and nicknames (`aka`), Riot IDs, roles, champion pools per role (a class like `tanks` or `marksmen` works too), notes on how they play. Your own pool shapes your picks and is all brb ever locks for you. Friends in your party are recognised in champ select, even when ranked hides names, and their pools get scored against the enemy comp. She never suggests banning what you or they play.
+- **Players aren't equal.** With a Riot ID (or several, for alt accounts), she reads that player's last 60 ranked and draft games per account in the background: their own record per champion and role (the same role counts fully, the champion's other roles half; the "you" part, for them too), and their **damage level**, their share of their team's damage next to the high-elo average on the same champion and role (1 is average, 0.66 two thirds). You can also set a level by hand. For a player below average she ranks champions by how they hold up when their player deals little: each champion's win rate in its own low-damage games, next to the role's. A tank or an engage support barely drops; a mage whose only job is damage drops a lot, so "Cobika on Xerath" scores lower than "Cobika on Galio". For a player above average she looks at the high-damage games instead.
+- **Team check** (`league_team`, and at the end of every multi-player answer): projected damage (each champion's usual share of its team's damage times its player's level, against a usual team), AD/AP split, CC, frontline and who carries, with warnings like "low damage", "almost all AD" or "no real frontline". These come from the per-player stats in the high-elo games (damage dealt and taken, magic share, enemies immobilized).
+- **Carry threats**: `carry-threats.json` in her League folder lists champions that shut down a skilled player: point-and-click hard CC (Malzahar, Lissandra, Vi, Pantheon, Nautilus…) and easy champions whose lockdown works even when their player is behind (Lux, Veigar). The high-elo profiles add that second kind on their own: champions with much more CC than their role's usual that keep winning in their low-damage games. She flags carry threats on the enemy team and leans her bans toward them. Edit the list freely.
+- **brb** (`/brb`, the tray, or just tell her "brb, pick for me"): she accepts the queue, bans, and when your pick comes up hovers what you'd hovered, or else her best pick from your pool, then locks it in with 6 seconds left. Change the hover yourself and she backs off. She turns brb off when the game loads and comes to tell you what you're on; `/back` turns it off early.
+- **The pro data** is [Oracle's Elixir](https://oracleselixir.com)'s match data: every game of the major and minor leagues this year, downloaded from its public Google Drive folder the first time and refreshed every 3 days (last year's too, early in the year). It's boiled down to a small JSON in her `league` data folder. Drive sometimes refuses the download for a day when the file has been popular ("over quota"); she keeps the copy she has, and you can download the CSV from oracleselixir.com yourself and drop it in that folder (**Open the pro data folder** in the tray). Pro play isn't solo queue, so she says so when it matters; your own record and your squad notes are what bring it back to how you actually play.
+- **High-elo solo queue** (with your Riot API key): she collects ranked solo games from the top of your server's ladder, Diamond and up by default (`CAPRI_SOLOQ_TIER`: `emerald`, `diamond`, `master`, `grandmaster` or `challenger`), and keeps a game only when at least 5 of the 10 players are at that level right now. There are far more Diamond+ games than a development key can fetch (about 100 requests every 2 minutes, roughly 2,500 games an hour), so the crawl runs in the background whenever she has a key: the ladder once a day (all of Diamond is about 200 pages), then random players' new games, appended to a file as they come. She keeps the newest 60,000 games of the last 21 days (`CAPRI_SOLOQ_MAX`, `CAPRI_SOLOQ_DAYS`), so after a day of running a common lane matchup has hundreds of games. Stats are rebuilt in the background every 20 minutes, without freezing her. Once there's solo queue data, a pro game counts half as much. Get a key at [developer.riotgames.com](https://developer.riotgames.com) and give it to her with `/league key RGAPI-…` (it's checked, then kept encrypted in the keychain, and never sent to a model) or as `RIOT_API_KEY` in `.env`. A development key expires after 24 hours; when it does she tells you, and `/league key` with a new one picks up where she stopped. A personal API key (register a project on the same site) doesn't expire. Your server comes from the League client, or `CAPRI_RIOT_PLATFORM` (`euw1` by default). The games are stored without player names or ids.
+- **How she reads the client**: through the League client's local API on 127.0.0.1, the same one Blitz, Porofessor and U.GG use (the port and password come from its lockfile). She reads your champ select, mastery, match history and party, and hovers, bans, locks and accepts through it. Locking a pick or ban from her chat goes through a permission card, because it's final.
 
 ### Agent routing
 
@@ -213,6 +233,7 @@ When you share your screen, she isn't in it: **Hide me from screen shares** (on 
 - **GitHub**, with CI watching on: the open PRs you authored in repos owned by your own account (or `CAPRI_CI_OWNERS`), and a failed job's log when one goes red. Nothing else, and never another org's repos.
 - **Her notes and the spend meter** live in the app's data folder (`memory.md`, `spend.json`), with your voice notes and reminders (`notes.md`, `reminders.json`).
 - **Your selection and clipboard**: read only when you summon her (or rewrite by voice), never in the background. Password-manager copies are skipped. What's read goes to Claude only as part of the message you send.
+- **League of Legends**, with champ select help or brb on: the League client's local API on 127.0.0.1, every 4 s while it's running (every second in champ select, 10 s while it isn't). Champions, bans, your role, mastery, recent games and party stay on your machine; only what she reads for a chat answer goes to Claude (champions, odds, your squad's names and notes), and never the names of anyone outside your squad. Pro data is one download from Oracle's Elixir's Google Drive every few days (retried hourly while Drive refuses). With a Riot API key, the high-elo ladder and those players' ranked games come from Riot's API, with champion names from its public Data Dragon; only your key goes out, nothing about you. Your squad, the games and the icons live in her `league` data folder.
 - **Notifications and your calendar**: with messages or the autopilot on, she reads notification banners and your Mac's calendar locally. None of it goes to a model: banners are shown and said out loud, and meeting titles only end up in the local transcript.
 
 ## Controls
@@ -251,6 +272,11 @@ Put any of these in `.env` (see `.env.example`):
 | `CAPRI_CI_OWNERS` | your `gh` account | GitHub accounts whose repos CI watching may look at, comma-separated |
 | `CAPRI_CI_EVERY` | `120` | Seconds between CI checks |
 | `CAPRI_NOTIFY_APPS` | `Slack,Messages,WhatsApp,Discord,Signal,Telegram` | Apps whose notifications she tells you about |
+| `CAPRI_LEAGUE_DIR` | the default install | League of Legends install folder (the one with `lockfile`), if it isn't in the default place |
+| `RIOT_API_KEY` | unset | Riot API key for high-elo solo queue games (`/league key` overrides it) |
+| `CAPRI_RIOT_PLATFORM` | from the client, else `euw1` | Your League server for Riot's API (`na1`, `kr`, `eun1`…) |
+| `CAPRI_SOLOQ_TIER` | `diamond` | Lowest tier of the solo queue games she collects |
+| `CAPRI_SOLOQ_MIN_TOP`, `CAPRI_SOLOQ_DAYS`, `CAPRI_SOLOQ_MAX` | `5`, `21`, `60000` | Players at that tier a game needs out of 10, how many days of games she keeps, and at most how many |
 | `CAPRI_CWD` | your home folder | Project folder she starts in |
 | `CAPRI_PORT` | `47913` | Port the hooks report to |
 | `CAPRI_START_HIDDEN` | unset | `1` starts her hidden in the tray |
@@ -288,6 +314,12 @@ src/
   rewrite.js     Rewrites a selection as you asked, in one Haiku call
   notes.js       Voice notes and reminders, parsed locally
   meetings.js    The meeting autopilot
+  league.js      League champ select: the watcher, her draft card, brb, her league_* tools
+  lcu.js         The League client's local API
+  prodata.js     Oracle's Elixir pro games: download, cache, per-champion and matchup stats
+  soloq.js       High-elo solo queue games on your server, crawled from Riot's API with your key
+  draft.js       Chances to win for picks, and bans, from pro stats and your own games
+  squad.js       The people you play with: roles, pools, notes
   workspaces.js  Follows you across Spaces (macOS) and virtual desktops (Windows)
   config.js      Saved settings
   preload.js     The narrow bridge the page is allowed to use

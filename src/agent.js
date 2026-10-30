@@ -9,6 +9,7 @@ const { EventEmitter } = require('node:events');
 const { z } = require('zod');
 const { AGENT_PROMPT, transcriptPrompt } = require('./persona');
 const memory = require('./memory');
+const league = require('./league');
 
 let sdk = null;
 const loadSdk = async () => (sdk ??= await import('@anthropic-ai/claude-agent-sdk')); // ESM-only
@@ -176,6 +177,12 @@ class Agent extends EventEmitter {
         return 'updating the todo list';
       case 'ExitPlanMode':
         return 'plan ready';
+      case 'mcp__capri__league_act':
+        return `${input.lock ? 'lock in' : 'hover'} ${input.action === 'ban' ? 'ban' : 'pick'}: ${input.champion}`;
+      case 'mcp__capri__league_draft':
+        return 'reading the draft';
+      case 'mcp__capri__league_team':
+        return 'checking the comp';
       default:
         return name;
     }
@@ -231,7 +238,7 @@ class Agent extends EventEmitter {
       { text: z.string().describe('Text the notes to delete contain') },
       async ({ text }) => ({ content: [{ type: 'text', text: memory.forget(text) }] }),
     );
-    const appended = [AGENT_PROMPT, this.transcripts && transcriptPrompt(this.transcripts), memory.prompt()].filter(Boolean).join('\n\n');
+    const appended = [AGENT_PROMPT, this.transcripts && transcriptPrompt(this.transcripts), league.PROMPT, memory.prompt()].filter(Boolean).join('\n\n');
     const q = query({
       prompt: inbox,
       options: {
@@ -247,8 +254,10 @@ class Agent extends EventEmitter {
         enableFileCheckpointing: true,
         // She asks her questions in chat instead of through a dialog.
         disallowedTools: ['AskUserQuestion'],
-        mcpServers: { capri: createSdkMcpServer({ name: 'capri', tools: [escalate, remember, forget] }) },
-        canUseTool: (name, input, opts) => (OWN_TOOLS.test(name) ? Promise.resolve({ behavior: 'allow', updatedInput: input }) : this.ask(name, input, opts)),
+        // Her League draft tools (league.js) live on the same server.
+        mcpServers: { capri: createSdkMcpServer({ name: 'capri', tools: [escalate, remember, forget, ...league.tools(tool)] }) },
+        // Locking in a League pick or ban is final, so that one still asks.
+        canUseTool: (name, input, opts) => (OWN_TOOLS.test(name) && !league.asks(name, input) ? Promise.resolve({ behavior: 'allow', updatedInput: input }) : this.ask(name, input, opts)),
         env: claudeEnv(),
         stderr: process.env.CAPRI_DEBUG ? (d) => console.warn('[agent]', d.trimEnd()) : undefined,
       },

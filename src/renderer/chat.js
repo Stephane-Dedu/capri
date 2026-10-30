@@ -25,6 +25,31 @@ window.Capri = window.Capri || {};
   // "opus 5.5" from "claude-opus-5-5".
   const shortModel = (model) => String(model ?? '').replace(/^claude-/, '').replace(/-(\d+)-(\d+)$/, ' $1.$2');
 
+  // Her League draft card: one row per champion with its icon, the chance to
+  // win (picks) or pro presence (bans) as a number and a bar, and why. The
+  // bar spans 35% to 70%, where draft odds actually live.
+  function draftCard({ kind, line, rows, title }) {
+    const el = document.createElement('div');
+    el.className = `draft ${kind}`;
+    const initials = (name) => esc(String(name).split(/[^A-Za-z]+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2));
+    const width = (v) => (kind === 'ban' ? clamp(v, 0, 1) : clamp((v - 0.35) / 0.35, 0.04, 1)) * 100;
+    el.innerHTML = [
+      `<div class="draft-head">${title ? esc(title) : kind === 'ban' ? 'ban' : `pick${rows[0]?.role ? ` · ${esc(rows[0].role)}` : ''}`}<span>${kind === 'ban' ? 'pro presence' : 'chance to win'}</span></div>`,
+      ...rows.map(
+        (r, i) => `<div class="draft-row${i === 0 ? ' top' : ''}">
+          ${r.icon ? `<img src="${esc(r.icon)}" alt="">` : `<b class="noicon">${initials(r.name)}</b>`}
+          <div class="draft-main">
+            <div class="draft-name">${i === 0 ? '<em>1st</em> ' : ''}${esc(r.name)}${r.mine ? '<span class="mine" title="your pool">★</span>' : ''}<strong>${Math.round(r.value * 100)}%</strong></div>
+            <div class="draft-bar"><i style="width:${width(r.value).toFixed(0)}%"></i></div>
+            <div class="draft-why">${r.tags.map(esc).join(' · ')}</div>
+          </div>
+        </div>`,
+      ),
+      line ? `<div class="draft-line">${esc(line)}</div>` : '',
+    ].join('');
+    return el;
+  }
+
   // Just enough markdown for a chat panel: fenced code, inline code, bold,
   // headings and bullets.
   function render(text) {
@@ -334,6 +359,12 @@ window.Capri = window.Capri || {};
       this.line(`notice ${kind}`, `${tag}${esc(text)}`);
     }
 
+    addDraft(card) {
+      this.toolBox = null;
+      this.log.append(draftCard(card));
+      this.scroll(true);
+    }
+
     beginReply(onMood) {
       const reply = new Reply(this.line('capri typing', ''), onMood);
       this.replies.push(reply);
@@ -462,4 +493,5 @@ window.Capri = window.Capri || {};
 
   window.Capri.Chat = Chat;
   window.Capri.shortModel = shortModel;
+  window.Capri.draftCard = draftCard;
 })();

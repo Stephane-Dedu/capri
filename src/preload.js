@@ -15,6 +15,7 @@ const INCOMING = [
   'wander',
   'reset',
   'notice',
+  'league',
   'activity',
   'agent:ready',
   'agent:info',

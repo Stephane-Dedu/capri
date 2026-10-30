@@ -75,6 +75,9 @@
   const fx = new FX(document.getElementById('fx'));
   const avatar = new Portrait(document.getElementById('avatar'), Portrait.FACE_VIEW);
   const cutin = { el: document.getElementById('cutin'), face: new Portrait(document.getElementById('cutinFace'), CUTIN_VIEW), timer: 0 };
+  // Her League draft card when the chat is closed (league.js).
+  const draft = { el: Object.assign(document.createElement('div'), { id: 'draft', hidden: true }), card: null, timer: 0 };
+  document.body.append(draft.el);
   const chat = new Chat(document.getElementById('chat'), {
     onSend: send,
     onEscape: closeChat,
@@ -634,6 +637,13 @@
 
   function syncOverlays() {
     if (chat.isOpen) chat.anchor(state.pos, SIZE);
+    // A draft card still up when the chat opens moves into it.
+    if (!draft.el.hidden) {
+      if (chat.isOpen) {
+        draft.el.hidden = true;
+        chat.addDraft(draft.card);
+      } else positionDraft();
+    }
     if (!bubble.hidden) positionBubble();
     if (!cutin.el.hidden) positionCutIn();
   }
@@ -875,12 +885,13 @@
     '/recap [topic] the last call · /standup your update · /memory what i know about you · /cost today\'s spend · /cap <$>|off',
     '/ci on|off watch CI on your own repos · /dance on|off dance when music plays · /hide on|off out of screen shares',
     '/note <text> · /remind in 20 min to … · /reminders · /undo put back my last edits · /notify on|off messages · /autopilot on|off meetings',
+    '/league on|off|update draft help in champ select · /league key RGAPI-… GM+ solo queue data · /brb i draft for you (queue, ban, lock) · /back',
     `/pose [name] strike a pose · /warp · esc put me away · ${SUMMON_KEY} summon (brings your neovim selection)`,
     'any other /command goes to claude code',
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders', 'undo'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'dance', 'hide', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup', 'notify', 'autopilot', 'note', 'remind', 'reminders', 'undo', 'league', 'brb', 'back'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];
@@ -902,7 +913,8 @@
         chat.addSys(`poses: ${rig.poses.join(' · ')} (i hold one for a minute)`);
       }
     } else if (MAIN_COMMANDS.includes(lower)) {
-      chat.addUser(text);
+      // A Riot API key stays out of the log.
+      chat.addUser(text.replace(/RGAPI-[\w-]+/g, 'RGAPI-•••'));
       const result = await bridge.command(lower, arg);
       if (result.error) {
         chat.addSys(result.error);
@@ -1061,6 +1073,49 @@
       }
     } else rig.pulse(0.5, 140);
   });
+
+  // ---- her League draft card ------------------------------------------------
+
+  // Champ select: she thinks for a beat, then shows her card (champion icons,
+  // chances to win). On your turn she comes to tell you and says the top
+  // pick out loud.
+  bridge.on('league', async (card) => {
+    touch();
+    if (card.turn) {
+      strikePose('think', 1600);
+      rig.setMood('curious', 3000);
+      await sleep(700);
+    }
+    if (chat.isOpen) chat.addDraft(card);
+    else showDraft(card, card.turn ? 25000 : 15000);
+    if (!card.turn) return;
+    rig.setMood('mischief', 6000);
+    if (!chat.isOpen) act(knockOnWindow);
+    if (card.line) speak(card.line, 'aside');
+  });
+
+  function showDraft(card, ms) {
+    draft.card = card;
+    draft.el.replaceChildren(window.Capri.draftCard(card));
+    draft.el.hidden = false;
+    draft.el.classList.remove('glitch-in');
+    void draft.el.offsetWidth;
+    draft.el.classList.add('glitch-in');
+    positionDraft();
+    clearTimeout(draft.timer);
+    draft.timer = setTimeout(() => (draft.el.hidden = true), ms);
+  }
+
+  // Beside her, on the roomier side.
+  function positionDraft() {
+    const w = draft.el.offsetWidth;
+    const h = draft.el.offsetHeight;
+    const right = state.pos.x + SIZE.w / 2 < innerWidth / 2;
+    const x = clamp(right ? state.pos.x + SIZE.w + 4 : state.pos.x - w - 4, 8, innerWidth - w - 8);
+    const y = clamp(state.pos.y + SIZE.h * 0.45 - h / 2, 8, innerHeight - h - 8);
+    draft.el.style.left = `${Math.round(x)}px`;
+    draft.el.style.top = `${Math.round(y)}px`;
+  }
 
   async function knockOnWindow() {
     if (await perchOnWindow()) {

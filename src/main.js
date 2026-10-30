@@ -1,6 +1,7 @@
+const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { app, BrowserWindow, screen, ipcMain, Tray, Menu, globalShortcut, nativeImage, dialog, shell } = require('electron');
+const { app, BrowserWindow, screen, ipcMain, Tray, Menu, globalShortcut, nativeImage, dialog, shell, safeStorage } = require('electron');
 
 try {
   process.loadEnvFile(path.join(__dirname, '..', '.env'));
@@ -24,6 +25,7 @@ const mac = require('./mac');
 const rewrite = require('./rewrite');
 const { notes, when } = require('./notes');
 const { Meetings } = require('./meetings');
+const league = require('./league');
 const workspaces = require('./workspaces');
 const { NAME } = require('./persona');
 
@@ -96,6 +98,13 @@ function start() {
   meetings.on('end', onMeetingEnd);
   meetings.on('warn', (text) => send('notice', { kind: 'attention', text, mood: 'annoyed' }));
   if (cfg.autopilot) meetings.start();
+  // League champ select (league.js): her draft card on your turn, brb, her tools.
+  league.init(path.join(app.getPath('userData'), 'league'));
+  league.setRiotKey(loadRiotKey());
+  league.on('notice', (notice) => send('notice', notice));
+  league.on('card', (card) => send('league', card));
+  league.on('change', () => refreshMenu());
+  if (cfg.league) league.enable(true);
   // You're busy at the keyboard, so she stays awake.
   let lastPing = 0;
   companion.on('activity', () => {
@@ -409,6 +418,41 @@ function setCI(on) {
   refreshMenu();
 }
 
+function setLeague(on) {
+  config.set({ league: on });
+  league.enable(on);
+  refreshMenu();
+}
+
+// Your Riot API key from /league key, encrypted with the OS keychain when it
+// can be. It never goes to a model.
+const riotKeyFile = () => path.join(app.getPath('userData'), 'league', 'riot-key');
+
+function loadRiotKey() {
+  try {
+    const data = fs.readFileSync(riotKeyFile());
+    return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(data) : data.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+function saveRiotKey(key) {
+  fs.mkdirSync(path.dirname(riotKeyFile()), { recursive: true });
+  fs.writeFileSync(riotKeyFile(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(key) : key, { mode: 0o600 });
+}
+
+const BRB_ON = "brb mode: i'll accept the queue, ban, and lock in your hover or your best pool pick with a few seconds left. /back when you're back.";
+
+// Her League folder's files, created on first open so there's something to edit.
+function openLeagueFile(file, empty) {
+  if (!fs.existsSync(file)) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, empty);
+  }
+  shell.openPath(file);
+}
+
 function setFollow(on) {
   config.set({ follow: on });
   const away = !spaces.here();
@@ -485,6 +529,17 @@ function buildMenu() {
     { type: 'separator' },
     { label: 'Watch CI on my own repos', type: 'checkbox', checked: cfg.ci, click: (item) => setCI(item.checked) },
     { label: 'Open her notes about me', click: () => shell.openPath(memory.file()) },
+    {
+      label: 'League of Legends',
+      submenu: [
+        { label: 'Help me draft in champ select', type: 'checkbox', checked: cfg.league, click: (item) => setLeague(item.checked) },
+        { label: "brb: draft for me while I'm away", type: 'checkbox', checked: league.brb, click: (item) => league.setBrb(item.checked, item.checked ? BRB_ON : "ok, you're back. all yours.") },
+        { type: 'separator' },
+        { label: 'Open my squad', click: () => openLeagueFile(league.squad.file, '{\n  "players": []\n}\n') },
+        { label: 'Open the pro data folder', click: () => shell.openPath(league.dir) },
+        { label: 'Update pro data now', click: () => league.data.refresh({ force: true }) },
+      ],
+    },
     ...(mac.supported
       ? [
           { type: 'separator' },
@@ -723,6 +778,35 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       const names = result.files.map((f) => path.basename(f));
       return { text: names.length ? `put back ${names.length} file${names.length === 1 ? '' : 's'}: ${names.join(', ')}` : 'nothing had changed since then.' };
     }
+    case 'league': {
+      const [sub, value] = arg.split(/\s+/);
+      if (arg === 'on' || arg === 'off') setLeague(arg === 'on');
+      else if (arg === 'update') {
+        await league.data.refresh({ force: true });
+        return { text: `pro data: ${league.data.describe()}` };
+      } else if (sub === 'key') {
+        // Checked against Riot before it's kept; the old key stays on failure.
+        if (!/^RGAPI-[\w-]{20,}$/.test(value ?? '')) return { error: '/league key RGAPI-… (from developer.riotgames.com)' };
+        const old = league.riotKey;
+        league.setRiotKey(value);
+        try {
+          const server = await league.soloq.check();
+          saveRiotKey(value);
+          return { text: `key ok, ${server}. ${config.get().league ? "i'm collecting GM+ solo queue games in the background." : '/league on and i start collecting GM+ solo queue games.'}` };
+        } catch (err) {
+          league.setRiotKey(old);
+          return { error: `riot said no: ${err.message}` };
+        }
+      } else if (arg) return { error: '/league on|off|update|key RGAPI-…' };
+      return { text: await league.describe() };
+    }
+    case 'brb':
+      if (arg === 'off') league.setBrb(false, "ok, you're back. all yours.");
+      else league.setBrb(true, BRB_ON);
+      return { text: league.brb ? 'brb: ON' : 'brb: off' };
+    case 'back':
+      league.setBrb(false, "welcome back. it's all yours.");
+      return { text: 'brb: off' };
     case 'recap':
       return { send: routines.recap(hearing.transcriptDir, arg) };
     case 'standup':
@@ -738,6 +822,7 @@ app.on('will-quit', () => {
   hearing?.stop();
   ci?.stop();
   meetings?.stop();
+  league.shutdown();
   notes.stop();
   mac.stop();
   companion?.stop();

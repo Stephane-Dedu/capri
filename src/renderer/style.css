@@ -513,6 +513,148 @@ body {
   color: rgba(255, 209, 222, 0.8);
 }
 
+/* her League draft card, in the chat or floating next to her */
+
+.draft {
+  margin: 0 0 10px;
+  padding: 6px 8px 7px;
+  background: rgba(7, 6, 11, 0.92);
+  border: 1.5px solid var(--pink);
+  box-shadow: 3px 3px 0 var(--purple), -2px 0 0 var(--cyan);
+  font-size: 11.5px;
+  color: var(--white);
+}
+
+.draft.ban {
+  border-color: var(--cyan);
+}
+
+.draft-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  color: var(--pink);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.draft.ban .draft-head {
+  color: var(--cyan);
+}
+
+.draft-head span {
+  color: rgba(244, 247, 255, 0.45);
+}
+
+.draft-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-top: 1px solid rgba(167, 60, 255, 0.25);
+}
+
+.draft-row img,
+.draft-row .noicon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(244, 247, 255, 0.25);
+}
+
+.draft-row .noicon {
+  display: grid;
+  place-items: center;
+  background: rgba(167, 60, 255, 0.3);
+  font-weight: 700;
+}
+
+.draft-row.top img,
+.draft-row.top .noicon {
+  width: 42px;
+  height: 42px;
+  border-color: var(--pink);
+}
+
+.draft-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.draft-name {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.draft-name em {
+  color: var(--pink);
+  font-style: normal;
+  font-size: 10px;
+}
+
+.draft-name .mine {
+  color: var(--green);
+  font-size: 10px;
+}
+
+.draft-name strong {
+  margin-left: auto;
+  color: var(--green);
+  font-size: 13px;
+}
+
+.draft-row.top .draft-name strong {
+  font-size: 15px;
+}
+
+.draft-bar {
+  height: 3px;
+  margin: 3px 0 2px;
+  background: rgba(244, 247, 255, 0.12);
+}
+
+.draft-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple), var(--green));
+}
+
+.draft.ban .draft-bar i {
+  background: linear-gradient(90deg, var(--purple), var(--cyan));
+}
+
+.draft-why {
+  overflow: hidden;
+  color: rgba(244, 247, 255, 0.6);
+  font-size: 10.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.draft-line {
+  margin-top: 5px;
+  color: #ffd1de;
+  font-style: italic;
+}
+
+#draft {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 290px;
+  pointer-events: none;
+}
+
+#draft .draft {
+  margin: 0;
+}
+
+#draft[hidden] {
+  display: none;
+}
+
 #ask {
   display: flex;
   gap: 8px;
