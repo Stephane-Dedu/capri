@@ -106,8 +106,10 @@ function setupHearing({ getWin, send, summon, changed }) {
     changed();
   }
 
-  function setTalk(on) {
-    config.set({ talk: on });
+  // typed: also answer typed messages out loud (/talk always). Talking off
+  // turns both off.
+  function setTalk(on, typed = config.get().talkTyped) {
+    config.set({ talk: on, talkTyped: on && typed });
     changed();
   }
 
@@ -158,7 +160,7 @@ function setupHearing({ getWin, send, summon, changed }) {
 
   function info() {
     const cfg = config.get();
-    return { listening: cfg.listen, wake: cfg.wake, ptt: cfg.ptt, pttKey: PushToTalk.label, talk: cfg.talk };
+    return { listening: cfg.listen, wake: cfg.wake, ptt: cfg.ptt, pttKey: PushToTalk.label, talk: cfg.talk, talkTyped: cfg.talkTyped };
   }
 
   function menu() {
@@ -168,6 +170,7 @@ function setupHearing({ getWin, send, summon, changed }) {
       { label: 'Wake word: "Capri"', type: 'checkbox', checked: cfg.wake, click: (item) => setWake(item.checked) },
       { label: `Push-to-talk: hold ${PushToTalk.label}`, type: 'checkbox', checked: cfg.ptt, click: (item) => setPtt(item.checked) },
       { label: 'Talk out loud', type: 'checkbox', checked: cfg.talk, click: (item) => setTalk(item.checked) },
+      { label: '…to what I type too', type: 'checkbox', checked: cfg.talkTyped, enabled: cfg.talk, click: (item) => setTalk(true, item.checked) },
       { label: 'Open transcripts', click: () => shell.openPath(transcript.dir) },
     ];
   }

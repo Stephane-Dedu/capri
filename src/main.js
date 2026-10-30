@@ -736,9 +736,16 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       return { text: config.get().reactions ? 'commentary: ON' : 'commentary: off. i\'ll only speak when claude finishes or needs you.' };
     case 'commands':
       return { text: commands.length ? commands.map((c) => `/${c}`).join(' ') : 'send me a message first, then ask again.' };
+    case 'talk': {
+      // on: when you talk to her · always: to what you type too · off: never.
+      if (arg === 'always' || arg === 'on') hearing.set.talk(true, arg === 'always');
+      else if (arg === 'off') hearing.set.talk(false);
+      else if (arg) return { error: '/talk on|always|off' };
+      const cfg = config.get();
+      return { text: `talking out loud: ${!cfg.talk ? 'off' : cfg.talkTyped ? 'ALWAYS, to what you type too' : 'ON, when you talk to me (hold right ⌥). /talk always for typed messages too'}` };
+    }
     case 'listen':
     case 'wake':
-    case 'talk':
     case 'ptt': {
       if (arg === 'on' || arg === 'off') hearing.set[name](arg === 'on');
       else if (arg) return { error: `/${name} on|off` };

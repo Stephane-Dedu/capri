@@ -67,7 +67,7 @@ Open the chat (click her, or `Cmd+Shift+Space` / `Ctrl+Shift+Space`) and ask for
 | `/model auto\|<name>` | Switch by task, or pin a model (`claude-opus-5-5`, `sonnet`…) |
 | `/hooks on\|off` | Install or remove the Claude Code hooks |
 | `/quiet` | Toggle her commentary on what you do |
-| `/wake`, `/listen`, `/talk`, `/ptt` `on\|off` | The "Capri" wake word, the always-on transcript, talking out loud, push-to-talk (same as the tray) |
+| `/wake`, `/listen`, `/talk`, `/ptt` `on\|off` | The "Capri" wake word, the always-on transcript, talking out loud, push-to-talk (same as the tray); `/talk always` answers typed messages out loud too |
 | `/recap [topic]`, `/standup` | Recap the last call, draft your standup (local files only) |
 | `/memory`, `/cost`, `/cap <$>\|off` | Her notes about you, today's spend, a daily spending cap |
 | `/ci on\|off`, `/dance on\|off`, `/hide on\|off` | Watch CI on your own repos, dance when music plays, stay out of screen shares |
@@ -113,7 +113,7 @@ Speech-to-text runs on your machine with whisper.cpp (large-v3-turbo by default,
 
 - **Push-to-talk** (on by default): hold **right ⌥** (right Alt on Windows) from any app, talk, let go. She warps over and your words go out as a message, with your Neovim selection and her look at the screen like a summon. Hold it on its own: pressing another key or clicking while it's down cancels, so typing ⌥-characters still works.
 - **Wake word "Capri"**: say "Capri, what does this error mean?" and she comes over with that question. A bare "Capri" gets a "yeah?", and whatever you say next goes to her. It only counts at the start of what you say, so talking *about* Capri doesn't wake her, and never from the computer's audio.
-- **Talk out loud** (on by default): when you talked to her, she answers out loud, with the macOS voice (Samantha, or Amélie for French) through a bitcrusher, and her jaw moves with it. She keeps it to a few spoken sentences and leaves code in the chat. She also says her short asides ("done!", "needs you") out loud, at most one every 20 seconds and never while there's talking on the computer's audio, so she won't chime in on a call. Typed chats stay silent.
+- **Talk out loud** (on by default): when you talked to her, she answers out loud, in the voice you set with `/voice` ([Her voice](#her-voice); the macOS voice until you do), through a bitcrusher, and her jaw moves with it. She keeps it to a few spoken sentences and leaves code in the chat. Typed chats stay silent unless you turn on `/talk always` (or **…to what I type too** in the tray): then typed replies are read out too, without the code, links and lists, and cut to their first few sentences. She also says her short asides ("done!", "needs you") out loud, at most one every 20 seconds and never while there's talking on the computer's audio, so she won't chime in on a call.
 - **Always listening (transcript)**: everything said near you goes into a local log: your mic as `[me]`, the computer's audio (the other side of calls) as `[call]`, one Markdown file per day, kept 14 days. **Open transcripts** shows the folder. The menu bar shows **● REC** while it's on. She only reads it when you ask about something that was said ("what did they just decide?", "what did Marc say about the deadline this morning?") or when your request clearly depends on it, and then only the part she needs, so it doesn't burn tokens in the background.
 
 Recording a conversation can need everyone's consent where you are (it does in France): tell people, or keep the log off on calls.

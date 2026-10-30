@@ -16,6 +16,7 @@ const DEFAULTS = {
   wake: false, // listen for "Capri"
   ptt: true, // hold a key to talk to her
   talk: true, // she answers out loud when you talked to her
+  talkTyped: false, // and to what you typed too (/talk always)
   dance: false, // dance when music plays (follows the computer's audio)
   hide: true, // left out of screen shares, recordings and screenshots (you still see her)
   anySelection: true, // on summon, bring the text selected in the front app (macOS)

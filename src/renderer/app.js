@@ -881,7 +881,7 @@
     '/new fresh conversation · /stop or ctrl+c stop working · /resume pick up my last session here',
     '/cd <folder> where i work · /mode default|acceptEdits|plan|auto · /model auto|<name>',
     '/hooks on|off hear from your other claude code sessions · /quiet toggle my commentary',
-    '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|off talk out loud · /ptt on|off push-to-talk',
+    '/wake on|off "capri" wake word · /listen on|off always-on transcript · /talk on|always|off talk out loud (always: to typed messages too) · /ptt on|off push-to-talk',
     '/recap [topic] the last call · /standup your update · /memory what i know about you · /cost today\'s spend · /cap <$>|off',
     '/ci on|off watch CI on your own repos · /dance on|off dance when music plays · /hide on|off out of screen shares',
     '/note <text> · /remind in 20 min to … · /reminders · /undo put back my last edits · /notify on|off messages · /autopilot on|off meetings',
@@ -1001,8 +1001,9 @@
 
   bridge.on('agent:done', (result) => {
     endWork();
-    // You asked out loud: her last message is the spoken answer.
-    const spoken = state.voiceTurn;
+    // You asked out loud (or want typed answers spoken too, /talk always):
+    // her last message is the spoken answer.
+    const spoken = state.voiceTurn || state.info.talkTyped;
     state.voiceTurn = false;
     if (spoken && result.ok && !result.interrupted) speak(state.lastReply, 'reply');
     if (result.interrupted) return;
