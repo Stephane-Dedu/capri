@@ -100,6 +100,9 @@
     lastReply: '', // her latest message, for reading back
     music: false, // music is playing on the computer: she dances
     nudged: '', // the day she last offered the standup
+    sessionStart: performance.now(), // since your last 10-minute break
+    stretched: false, // already told you to stretch this stretch of work
+    battery: { low: false, charging: null },
     following: false,
     spot: null, // { kind: 'ledge' | 'hang', until, … } while she sits on a window or hangs off the top
     flipped: false, // drawn upside down (hanging) // following you to another desktop
@@ -291,7 +294,7 @@
     if (frame.y < 130 || frame.y > innerHeight - 40 || lo > hi) return false;
     const spot = { kind: 'ledge', frame, until: performance.now() + rand(...SPOT_MS), nextCheck: 0 };
     const ok = await warp({ x: rand(lo, hi) - SIZE.w * HIPS_AT, y: frame.y - seat }, 'big', spot);
-    if (ok && Math.random() < 0.4) say(pick(QUIPS.ledge), 2200);
+    if (ok && Math.random() < 0.5) pop(pick(QUIPS.ledge), 'smug', 2400);
     return ok;
   }
 
@@ -300,7 +303,7 @@
   async function hangFromTop() {
     const spot = { kind: 'hang', until: performance.now() + rand(...SPOT_MS) };
     const ok = await warp({ x: rand(EDGE, innerWidth - SIZE.w - EDGE), y: -SIZE.h * (1 - KNEE_AT) }, 'big', spot);
-    if (ok && Math.random() < 0.4) say(pick(QUIPS.hang), 2200);
+    if (ok && Math.random() < 0.5) pop(pick(QUIPS.hang), 'mischief', 2400);
     return ok;
   }
 
@@ -461,11 +464,16 @@
   function behave(now) {
     if (state.acting || state.moving || drag || rig.sleeping) return;
     tendSpot(now);
+    checkStretch(now);
     // On a spot, or dancing: she stays put.
     if (state.spot || state.music) return;
     if (now >= state.nextQuip) {
-      state.nextQuip = now + rand(45000, 100000);
-      if (!chat.isOpen && Math.random() < 0.6) say(pick(QUIPS.idle));
+      state.nextQuip = now + rand(35000, 80000);
+      if (!chat.isOpen && Math.random() < 0.75) {
+        const line = dayLine() ?? pick(QUIPS.idle);
+        if (Math.random() < 0.45) pop(line, pick(['mischief', 'smug', 'curious', 'hype']));
+        else say(line);
+      }
     }
     if (now < state.nextAction) return;
     const roaming = state.wander && !chat.isOpen && !state.replying;
@@ -514,7 +522,7 @@
     if (state.replying) return state.working;
     if (state.spot) return state.spot.kind;
     if (state.music) return 'dance';
-    if (!chat.isOpen && now - state.lastActivity > SLEEP_AFTER) return 'sleep';
+    if (!chat.isOpen && now - state.lastActivity > (isNight() ? 90000 : SLEEP_AFTER)) return 'sleep';
     if (now > state.idlePoseUntil) {
       let next = weighted(IDLE_POSES);
       if (next === state.idlePose) next = weighted(IDLE_POSES);
@@ -546,8 +554,54 @@
 
   // Anything you do keeps her up (and wakes her).
   function touch() {
-    state.lastActivity = performance.now();
+    const now = performance.now();
+    if (now - state.lastActivity > 10 * 60000) {
+      state.sessionStart = now;
+      state.stretched = false;
+    }
+    state.lastActivity = now;
   }
+
+  // ---- your day ----------------------------------------------------------
+  // Canned reactions to the clock, your battery and long sessions: no model.
+
+  // Late at night she falls asleep sooner.
+  const isNight = () => new Date().getHours() < 5;
+
+  // Sometimes an idle line about the time of day instead of a random one.
+  function dayLine() {
+    if (Math.random() < 0.6) return null;
+    const d = new Date();
+    const h = d.getHours();
+    if (h < 5) return pick(QUIPS.night);
+    if (d.getDay() === 0 || d.getDay() === 6) return pick(QUIPS.weekend);
+    if (h >= 12 && h < 14) return pick(QUIPS.lunch);
+    if (d.getDay() === 5 && h >= 17) return pick(QUIPS.fridayEvening);
+    return null;
+  }
+
+  // Two hours at it without a 10-minute break: stretch.
+  function checkStretch(now) {
+    if (state.stretched || now - state.sessionStart < 2 * 3600000 || chat.isOpen) return;
+    state.stretched = true;
+    pop(pick(QUIPS.stretch), 'soft', 5000);
+  }
+
+  // Low battery makes her sleepy; plugging in perks her up.
+  navigator.getBattery?.().then((battery) => {
+    const check = () => {
+      const low = battery.level < 0.15 && !battery.charging;
+      if (low && !state.battery.low) pop(pick(QUIPS.lowBattery), 'soft', 5000);
+      if (battery.charging && state.battery.charging === false) {
+        pop(pick(QUIPS.charging), 'hype', 3000);
+        rig.pulse(0.8, 200);
+      }
+      state.battery = { low, charging: battery.charging };
+    };
+    battery.addEventListener('levelchange', check);
+    battery.addEventListener('chargingchange', check);
+    check();
+  });
 
   // ---- overlays ----------------------------------------------------------
 
@@ -993,7 +1047,7 @@
     if (n.kind === 'meeting') {
       touch();
       cutIn(n.mood ?? 'curious');
-    }
+    } else if (n.kind === 'quip' && !chat.isOpen && Math.random() < 0.4) cutIn(n.mood ?? 'mischief');
     if (n.kind === 'done') celebrate();
     else if (n.kind === 'attention') {
       touch();

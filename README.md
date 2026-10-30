@@ -129,6 +129,7 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - **Messages** (off by default; `/notify on` or the tray): when Slack, Messages, WhatsApp, Discord, Signal or Telegram shows a notification, she pops up with it and says who it's from ("Slack message from Julie"). She reads the banner through Accessibility; the text stays on your screen and never goes to a model. `CAPRI_NOTIFY_APPS` changes the list. She keeps quiet during calls.
 - **Meeting autopilot** (off by default; `/autopilot on` or the tray): she reads your calendar on this Mac (Calendars permission, nothing fetched from a server). A minute before a meeting with a video link or other attendees she pops up; while it runs the transcript is on (she turns it back off after if it was off), with the meeting's start and end marked in it; at the end she offers `/recap`. Titles stay local unless you ask for the recap.
 - **`/undo`** puts back the files her last editing turn changed (each turn is checkpointed before she edits), and the next `/undo` goes one turn further. It covers her file edits, not what she changed through shell commands, and only in the current conversation.
+- **Your day**: she yawns and falls asleep sooner after midnight, comments on your weekend coding and Friday evenings, gets sleepy on low battery and perks up when you plug in, tells you to stretch after two hours without a break, and gives a Friday-afternoon, weekend or late-night deploy a look. All canned, no model.
 
 ### Agent routing
 

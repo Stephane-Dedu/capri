@@ -26,6 +26,23 @@ const GAP = 60000;
 // "Task done" lines are always shown; they're written fresh only this often.
 const DONE_GAP = 12000;
 
+// Shipping things at a bad time.
+const DEPLOY = /\b(deploy\w*|release|kubectl\s+(apply|rollout)|helm\s+(upgrade|install)|terraform\s+apply|tofu\s+apply|terragrunt\s+(run-all\s+)?apply|npm\s+publish|git\s+push\b[^\n]*(--force|\s-f\b))/i;
+const BRAVE = {
+  friday: ['a friday deploy? bold. i like it.', "deploying on a friday afternoon. i'll get the popcorn.", 'Friday ship. Who are you tryna haze?'],
+  weekend: ['shipping on the weekend? Naw, c\'mon.', 'weekend deploy. the pager is watching.'],
+  night: ["deploying at this hour? i'm staying up for this.", 'night deploy. *bzzt* hold my mane.'],
+};
+
+function braveHour(d = new Date()) {
+  const day = d.getDay();
+  const hour = d.getHours();
+  if (hour >= 23 || hour < 5) return 'night';
+  if (day === 0 || day === 6) return 'weekend';
+  if (day === 5 && hour >= 14) return 'friday';
+  return null;
+}
+
 const SKIP_DIRS = new Set(['node_modules', '.git', '.hg', '.svn', 'dist', 'build', 'out', '.next', '.nuxt', '.cache', 'coverage', '__pycache__', '.venv', 'venv', 'env', 'target', '.idea', '.vscode', 'AppData']);
 const CODE_EXT = new Set('js mjs cjs ts tsx jsx py rb go rs java kt swift c h cc cpp hpp cs php lua sh ps1 bat sql css scss sass less html vue svelte astro md mdx json yml yaml toml ini cfg glsl hlsl shader gd zig ex exs hs ml clj dart r jl'.split(' '));
 
@@ -50,6 +67,7 @@ class Companion extends EventEmitter {
     this.root = null;
     this.quipping = false;
     this.lastReaction = 0;
+    this.lastBrave = 0; // the last "deploying now?" look
     this.lastDone = 0;
     this.fileTimers = new Map();
     this.touched = new Map();
@@ -118,6 +136,14 @@ class Companion extends EventEmitter {
     if (input.file_path) this.touched.set(path.resolve(String(input.file_path)), Date.now());
     if (e.tool === 'Bash' || e.tool === 'PowerShell') {
       const failed = Boolean(e.failed);
+      // A deploy on a Friday afternoon, a weekend or late at night gets a
+      // look from her, canned (no model call).
+      const brave = braveHour();
+      if (!failed && brave && DEPLOY.test(String(input.command ?? '')) && Date.now() - this.lastBrave > 30 * 60000) {
+        this.lastBrave = Date.now();
+        this.notice({ kind: 'quip', project: p, text: pick(BRAVE[brave]), mood: 'glitch' });
+        return;
+      }
       this.maybeReact(
         failed ? 'failed' : 'command',
         p,
