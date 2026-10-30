@@ -814,7 +814,7 @@
   ].join('\n');
 
   // Commands main answers (her setup, routines) rather than Claude Code.
-  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'cost', 'cap', 'memory', 'recap', 'standup'];
+  const MAIN_COMMANDS = ['cd', 'pwd', 'mode', 'model', 'resume', 'hooks', 'quiet', 'commands', 'listen', 'wake', 'talk', 'ptt', 'ci', 'cost', 'cap', 'memory', 'recap', 'standup'];
 
   async function command(text) {
     const [, name = '', arg = ''] = text.match(/^\/(\S*)\s*([\s\S]*)$/) ?? [];

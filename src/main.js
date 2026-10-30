@@ -16,6 +16,7 @@ const nvim = require('./nvim');
 const look = require('./look');
 const { frontmost } = require('./frontmost');
 const { setupHearing } = require('./hearing');
+const { CI } = require('./ci');
 const costs = require('./costs');
 const memory = require('./memory');
 const routines = require('./routines');
@@ -34,6 +35,7 @@ let companion = null;
 let spaces = null;
 let shot = null; // the screenshot from the last summon, until she looks at it
 let hearing = null;
+let ci = null;
 const activeWindow = frontmost();
 let commands = [];
 let visible = !process.env.CAPRI_START_HIDDEN;
@@ -69,6 +71,11 @@ function start() {
     reactions: cfg.reactions,
   });
   companion.on('notice', (notice) => send('notice', notice));
+  // CI on your own repos' PRs (ci.js), off until you turn it on.
+  ci = new CI({ diagnose: (note) => companion.quip(note) });
+  ci.on('notice', (notice) => send('notice', notice));
+  ci.on('warn', (message) => console.warn(`[capri] ci: ${message}`));
+  if (cfg.ci) ci.start();
   // You're busy at the keyboard, so she stays awake.
   let lastPing = 0;
   companion.on('activity', () => {
@@ -270,6 +277,13 @@ function setLook(on) {
   refreshMenu();
 }
 
+function setCI(on) {
+  config.set({ ci: on });
+  if (on) ci.start();
+  else ci.stop();
+  refreshMenu();
+}
+
 function setFollow(on) {
   config.set({ follow: on });
   const away = !spaces.here();
@@ -341,6 +355,8 @@ function buildMenu() {
     { label: 'Look at my screen when summoned', type: 'checkbox', checked: cfg.look, click: (item) => setLook(item.checked) },
     { type: 'separator' },
     ...(hearing?.menu() ?? []),
+    { type: 'separator' },
+    { label: 'Watch CI on my own repos', type: 'checkbox', checked: cfg.ci, click: (item) => setCI(item.checked) },
     { label: 'Open her notes about me', click: () => shell.openPath(memory.file()) },
     { label: 'Warp somewhere', click: () => send('warp') },
     { type: 'separator' },
@@ -499,6 +515,11 @@ ipcMain.handle('capri:command', async (_event, { name, arg = '' } = {}) => {
       else if (arg) return { error: `/${name} on|off` };
       return { text: `${hearing.labels[name]}: ${config.get()[name] ? 'ON' : 'off'}` };
     }
+    case 'ci': {
+      if (arg === 'on' || arg === 'off') setCI(arg === 'on');
+      else if (arg) return { error: '/ci on|off' };
+      return { text: `watching CI on your own repos' PRs: ${config.get().ci ? 'ON' : 'off'}` };
+    }
     case 'cost': {
       const rows = Object.entries(costs.models).map(([model, usd]) => `${model.replace(/^claude-/, '')} $${usd.toFixed(3)}`);
       return { text: `today: $${costs.total.toFixed(2)}${rows.length ? ` (${rows.join(' · ')})` : ''}${costs.cap ? ` · cap $${costs.cap}` : ' · no cap'}. estimates from the SDK, not a bill.` };
@@ -531,6 +552,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   spaces?.stop();
   hearing?.stop();
+  ci?.stop();
   companion?.stop();
   agent?.reset();
 });

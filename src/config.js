@@ -16,6 +16,7 @@ const DEFAULTS = {
   wake: false, // listen for "Capri"
   ptt: true, // hold a key to talk to her
   talk: true, // she answers out loud when you talked to her
+  ci: false, // watch CI on your own repos' open PRs
   dailyCap: 0, // stop spending past this many dollars a day (0: no cap)
   sessions: {}, // project folder -> her last session there, for /resume
 };

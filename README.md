@@ -106,6 +106,7 @@ On macOS she needs a few permissions, for Electron or the terminal you start her
 - **`/standup`**: a draft of your update since the last working day, from `git log` in the folders you had Claude Code sessions in, plus the transcript for meetings. The first time you open her on a weekday morning, she offers it in one line; nothing runs until you ask.
 - Both read local files only: no `git fetch`, no `gh`, no network, and they never create tickets, issues or messages anywhere.
 - **Her notes about you**: she saves short facts with her own `remember` / `forget` tools (no permission card) when she learns something that'll still matter next week, and reads them at the start of every conversation. `/memory` shows them, **Open her notes about me** in the tray opens the file to edit, and "forget that…" works in chat.
+- **CI on your own repos** (off by default; `/ci on` or the tray): every 2 minutes she checks the open PRs you authored, with your `gh` login. Only repos owned by your GitHub account are queried, or by the owners you list in `CAPRI_CI_OWNERS`; the owner filter is part of the search, so work orgs never see a request from her. When a PR goes red she reads the failed job's log and one Haiku call says what broke, and she knocks on your window about it. When it goes green again, she says so, for free.
 - **The cost meter**: today's spend shows in the chat header (hover for each model) and with `/cost`: her chat, one-liners, screen looks and CI diagnoses, from the SDK's own estimates (not a bill). `/cap 5` sets a daily cap in dollars: once it's reached she stops sending new messages, one-liners and looks until tomorrow, or until you raise it (`/cap off` drops it).
 
 ### Agent routing
@@ -183,6 +184,7 @@ Switch to another Space (macOS) or virtual desktop (Windows) and she follows you
 - **Your screen**: one screenshot per summon that opens the chat, from the display you're on, sent to Claude Haiku 5.5. It's told to describe chats, email and anything private by app type only and never repeat passwords or keys, but whatever's on screen does reach the model, so turn it off in the tray when that matters. The image isn't saved and isn't sent anywhere else; only the text description goes into your conversation.
 - **The window you're in**: to sit on it, she reads the frame of the front window (position and size only, never its title or contents), now and then between jobs and every 0.7 s while she's sitting on it. It stays on your machine.
 - **Your microphone and the computer's audio**: only while the transcript, the wake word or push-to-talk needs them. Speech-to-text is whisper.cpp on 127.0.0.1, so audio never leaves your machine. Text reaches Claude only as the message you said to her, or when she reads the transcript to answer you. Her own voice is muted out of the log.
+- **GitHub**, with CI watching on: the open PRs you authored in repos owned by your own account (or `CAPRI_CI_OWNERS`), and a failed job's log when one goes red. Nothing else, and never another org's repos.
 
 ## Controls
 
@@ -217,6 +219,8 @@ Put any of these in `.env` (see `.env.example`):
 | `CAPRI_VOICE_EN`, `CAPRI_VOICE_FR` | `Samantha`, `Amélie` | macOS voices for her (`say -v '?'` lists them) |
 | `CAPRI_VOICE_RATE` | `205` | How fast she talks, in words per minute |
 | `CAPRI_TRANSCRIPT_DAYS` | `14` | How long the transcript keeps a day |
+| `CAPRI_CI_OWNERS` | your `gh` account | GitHub accounts whose repos CI watching may look at, comma-separated |
+| `CAPRI_CI_EVERY` | `120` | Seconds between CI checks |
 | `CAPRI_CWD` | your home folder | Project folder she starts in |
 | `CAPRI_PORT` | `47913` | Port the hooks report to |
 | `CAPRI_START_HIDDEN` | unset | `1` starts her hidden in the tray |
@@ -246,6 +250,7 @@ src/
   transcript.js  The daily transcript files
   ptt.js         The push-to-talk key, from any app
   voice.js       Her voice: the OS speech synthesizer, French or English
+  ci.js          Watches CI on your own repos' open PRs with gh
   routines.js    The /recap and /standup prompts
   memory.js      Her notes about you, and her remember / forget tools
   costs.js       Today's spend per model, and the daily cap
